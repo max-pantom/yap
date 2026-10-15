@@ -103,6 +103,29 @@ details[open] summary::after { content: "–"; }
 .chk input { accent-color: var(--accent); }
 .curve { width: 100%; height: 96px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-size: 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 8px; resize: vertical; }
+/* Mode switch + playground banner */
+.modes { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; background: var(--panel); }
+.modes button { border: 0; padding: 6px 12px; border-radius: 7px; background: transparent; }
+.modes button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.banner { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; border: 1px dashed var(--accent); border-radius: 12px; padding: 10px 14px; font-size: 13px; }
+.banner strong { color: var(--accent); }
+.banner[hidden], .progress[hidden] { display: none; }
+/* Canvas / export */
+.canvas-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.canvas-card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.canvas-card h2 { font-size: 15px; margin: 0; letter-spacing: -0.01em; }
+.comp-wrap { display: grid; place-items: center; background: repeating-conic-gradient(var(--line) 0% 25%, transparent 0% 50%) 50% / 16px 16px; border-radius: 10px; padding: 10px; }
+#comp { max-width: 100%; max-height: 360px; border-radius: 4px; box-shadow: 0 1px 6px rgba(0,0,0,0.12); }
+.mark-row { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.mark-row .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.mark-row .fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mark-row select { font: inherit; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.mark-row input[type=range] { width: 100%; accent-color: var(--accent); }
+.mark-row .sl { grid-column: 1 / -1; display: grid; grid-template-columns: 70px 1fr 48px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+input[type=color] { width: 34px; height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 0 2px; background: var(--bg); }
+.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 120ms linear; }
+.result video, .result img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>
 
@@ -110,6 +133,10 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   <header class="top">
     <div>
       <h1>Yap Mark Lab <span>· tune the morph</span></h1>
+      <div class="modes" role="group" aria-label="What you're editing" style="margin-top:10px">
+        <button id="modeYap" aria-pressed="true">Yap settings</button>
+        <button id="modePlay" aria-pressed="false">Playground</button>
+      </div>
       <p class="sub">Your five keyframes, live. Adjust timing, easing, the liquid joins and how each app state moves. Pause on a keyframe to drag its rings. When it feels right, save it and Claude builds exactly this into Yap.</p>
     </div>
     <div class="save-row">
@@ -118,6 +145,13 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
       <button class="primary" id="save">Save for Yap</button>
     </div>
   </header>
+  <div class="banner" id="banner" hidden>
+    <span><strong>Playground.</strong> Experiment freely: nothing here changes Yap. Your playground is kept in this browser.</span>
+    <span class="row" style="padding:0">
+      <button id="fromYap">Start from Yap's settings</button>
+      <button id="toYap">Use this in Yap…</button>
+    </span>
+  </div>
 
   <section class="stage" aria-label="Preview">
     <div class="hero">
@@ -136,6 +170,13 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
 
     <div class="keys" id="keys" aria-label="Keyframes: click to include or skip in the loop"></div>
 
+    <div class="canvas-card" id="canvasCard">
+      <div class="head"><h2>Canvas</h2><span class="status" id="compInfo"></span></div>
+      <div class="comp-wrap"><canvas id="comp" aria-label="Export canvas preview"></canvas></div>
+      <div class="progress" id="progress" hidden><i></i></div>
+      <div class="result" id="result"></div>
+    </div>
+
     <div class="previews">
       <div class="pv"><div class="menubar"><span>Tue 9:41</span><canvas id="mbLight"></canvas></div><div class="menubar dark"><span>Tue 9:41</span><canvas id="mbDark"></canvas></div><span class="cap">Menu bar, light and dark (18 pt)</span></div>
       <div class="pv"><div class="flowbar"><div class="pill"><canvas id="pillMark"></canvas><div class="bars" id="pillBars"></div></div></div><span class="cap">Flow bar pill (20 pt)</span></div>
@@ -144,6 +185,26 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   </section>
 
   <aside class="rail" aria-label="Controls">
+    <details open>
+      <summary>Canvas &amp; export</summary>
+      <div class="ctl"><label for="aspect">Shape</label><span></span>
+        <select id="aspect"><option value="1:1">Square 1:1</option><option value="16:9">Wide 16:9</option><option value="9:16">Story 9:16</option><option value="4:5">Portrait 4:5</option><option value="3:1">Banner 3:1</option></select></div>
+      <div class="ctl"><label for="res">Size</label><span></span>
+        <select id="res"><option value="720">720 px (short side)</option><option value="1080" selected>1080 px</option><option value="1440">1440 px</option><option value="2160">2160 px (4K)</option></select></div>
+      <div class="ctl" style="grid-template-columns:1fr auto auto"><label for="bg">Background</label><input type="color" id="bg" value="#ffffff"><span></span>
+        <label class="chk" style="grid-column:1/-1;padding:0"><input type="checkbox" id="transparent"> Transparent (PNG stills only; videos use the colour)</label></div>
+      <div class="ctl"><label>Marks on the canvas</label><span></span></div>
+      <div class="seg" id="countSeg" style="padding-top:0"></div>
+      <div id="markRows"></div>
+      <div class="ctl"><label for="layout">Arrangement</label><span></span>
+        <select id="layout"><option value="auto">Automatic</option><option value="row">In a row</option><option value="column">In a column</option><option value="stack">Stacked (overlapping)</option></select></div>
+      <div class="ctl"><label for="gap">Spacing</label><output id="gapOut"></output><input type="range" id="gap" min="0" max="40" step="1"></div>
+      <div class="ctl"><label for="loops">Loops in the video</label><output id="loopsOut"></output><input type="range" id="loops" min="1" max="6" step="1"></div>
+      <div class="ctl"><label for="fps">Frame rate</label><span></span><select id="fps"><option value="30">30 fps</option><option value="60" selected>60 fps</option></select>
+        <span class="note" id="loopNote"></span></div>
+      <div class="row"><button class="primary" id="exportVideo">Export video</button><button id="exportPng">Save PNG still</button></div>
+    </details>
+
     <details open>
       <summary>Preview state</summary>
       <div class="seg" id="states"></div>
@@ -209,6 +270,7 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   </aside>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
 <script>
 (() => {
   // ---------- Model ----------
@@ -230,8 +292,15 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
     states: { idleFrame: 1, idleDrift: 6, listenBase: 0.15, listenMax: 2.2, thinkSpeed: 1.6, pasteMs: 420, startMs: 1100, recPulseMs: 1800 },
   };
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  let cfg = clone(DEFAULTS);
-  try { const d = localStorage.getItem("yap-mark-lab"); if (d) cfg = Object.assign(clone(DEFAULTS), JSON.parse(d)); } catch (_) {}
+  // Two independent settings sets: what Yap uses, and a playground that never touches it.
+  const store = {
+    get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (_) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  };
+  let yapCfg = Object.assign(clone(DEFAULTS), store.get("yap-mark-lab") || {});
+  let playCfg = Object.assign(clone(DEFAULTS), store.get("yap-mark-lab-playground") || store.get("yap-mark-lab") || {});
+  let mode = store.get("yap-mark-lab-mode") === "play" ? "play" : "yap";
+  let cfg = mode === "play" ? playCfg : yapCfg;
 
   // ---------- Easing ----------
   function bezier(x1, y1, x2, y2) {
@@ -300,10 +369,10 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   /** Draws the mark into `canvas` at `cssSize` points. */
   function drawMark(canvas, cssSize, rings, opt = {}) {
     const dpr = Math.min(3, window.devicePixelRatio || 1);
-    const px = Math.max(8, Math.round(cssSize * dpr));
+    const px = opt.px ? Math.max(8, Math.round(opt.px)) : Math.max(8, Math.round(cssSize * dpr));
     if (canvas.width !== px) { canvas.width = canvas.height = px; }
     const ctx = canvas.getContext("2d");
-    const small = cssSize < 40;
+    const small = (opt.px ? opt.px / 2 : cssSize) < 40;
     const boost = small ? cfg.smallBoost : 1;
     const scale = opt.scale ?? 1;
     const s = px / 300 * scale;
@@ -550,14 +619,42 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   let kd; function buildKeysDebounced() { clearTimeout(kd); kd = setTimeout(buildKeys, 120); }
 
   // ---------- Persistence ----------
-  function exportCfg() { const c = clone(cfg); delete c._previewSpeed; return c; }
+  function exportCfg(c = cfg) { const o = clone(c); delete o._previewSpeed; return o; }
   let saveT;
   function changed() {
     $("json").value = JSON.stringify(exportCfg(), null, 1);
     clearTimeout(saveT);
-    saveT = setTimeout(() => { try { localStorage.setItem("yap-mark-lab", JSON.stringify(cfg)); } catch (_) {} }, 300);
-    if (savedJSON && savedJSON !== JSON.stringify(exportCfg())) $("status").textContent = "Unsaved changes";
+    saveT = setTimeout(() => store.set(mode === "play" ? "yap-mark-lab-playground" : "yap-mark-lab", cfg), 300);
+    if (mode === "yap" && savedJSON && savedJSON !== JSON.stringify(exportCfg())) $("status").textContent = "Unsaved changes";
+    if (mode === "play") $("status").textContent = "Playground · kept in this browser, Yap unchanged";
   }
+
+  function applyMode() {
+    cfg = mode === "play" ? playCfg : yapCfg;
+    ease = bezier(...cfg.ease);
+    $("modeYap").setAttribute("aria-pressed", mode === "yap");
+    $("modePlay").setAttribute("aria-pressed", mode === "play");
+    $("banner").hidden = mode !== "play";
+    $("save").hidden = mode === "play";
+    store.set("yap-mark-lab-mode", mode);
+    bindSliders(); buildKeys(); changed();
+    if (mode === "yap") $("status").textContent = savedJSON ? (savedJSON === JSON.stringify(exportCfg()) ? "Matches what Yap uses" : "Unsaved changes") : "Not saved yet";
+  }
+  $("modeYap").onclick = () => { mode = "yap"; applyMode(); };
+  $("modePlay").onclick = () => { mode = "play"; applyMode(); };
+  $("fromYap").onclick = () => { const sp = playCfg._previewSpeed; playCfg = Object.assign(clone(DEFAULTS), exportCfg(yapCfg), { _previewSpeed: sp }); applyMode(); $("status").textContent = "Playground reset to Yap's settings"; };
+  let toYapArmed = 0;
+  $("toYap").onclick = async () => {
+    if (Date.now() - toYapArmed > 4000) {   // two-step: the page can't show a confirm dialog
+      toYapArmed = Date.now(); $("toYap").textContent = "Click again to replace Yap's settings";
+      setTimeout(() => { $("toYap").textContent = "Use this in Yap…"; }, 4000); return;
+    }
+    toYapArmed = 0; $("toYap").textContent = "Use this in Yap…";
+    yapCfg = Object.assign(clone(DEFAULTS), exportCfg(playCfg), { _previewSpeed: yapCfg._previewSpeed });
+    store.set("yap-mark-lab", yapCfg);
+    mode = "yap"; applyMode();
+    await saveForYap();
+  };
   let db = null, savedJSON = null;
   (async () => {
     try { db = await (window.claude?.use?.("db") ?? null); } catch (_) { db = null; }
@@ -566,25 +663,26 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
       const snap = await db.doc("tuning/current").get();
       if (snap.exists && snap.data()?.config) {
         const saved = snap.data().config;
-        cfg = Object.assign(clone(DEFAULTS), saved, { _previewSpeed: cfg._previewSpeed });
-        ease = bezier(...cfg.ease);
-        savedJSON = JSON.stringify(exportCfg());
-        bindSliders(); buildKeys(); changed();
-        $("status").textContent = "Loaded your saved settings";
+        yapCfg = Object.assign(clone(DEFAULTS), saved, { _previewSpeed: yapCfg._previewSpeed });
+        savedJSON = JSON.stringify(exportCfg(yapCfg));
+        if (!store.get("yap-mark-lab-playground")) playCfg = Object.assign(clone(DEFAULTS), clone(saved), { _previewSpeed: 1 });
+        applyMode();
+        if (mode === "yap") $("status").textContent = "Loaded the settings Yap uses";
       }
     } catch (_) {}
   })();
-  $("save").onclick = async () => {
+  async function saveForYap() {
     if (!db) { copy(); return; }
     $("status").textContent = "Saving…";
     try {
-      await db.doc("tuning/current").set({ config: exportCfg(), savedAt: new Date().toISOString() });
-      savedJSON = JSON.stringify(exportCfg());
-      $("status").textContent = "Saved · Claude can read this now";
+      await db.doc("tuning/current").set({ config: exportCfg(yapCfg), savedAt: new Date().toISOString() });
+      savedJSON = JSON.stringify(exportCfg(yapCfg));
+      $("status").textContent = "Saved for Yap · Claude can read this now";
     } catch (e) {
       $("status").textContent = e?.code === "invalid_argument" ? "You can view but not save this page: use Copy settings" : "Couldn't save. Try again, or use Copy settings";
     }
-  };
+  }
+  $("save").onclick = () => { if (mode === "yap") saveForYap(); };
   function copy() {
     const text = JSON.stringify(exportCfg());
     navigator.clipboard?.writeText(text).then(() => { $("status").textContent = "Copied: paste it to Claude"; },
@@ -592,13 +690,319 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
   }
   $("copy").onclick = copy;
   $("applyJson").onclick = () => {
-    try { const v = JSON.parse($("json").value); cfg = Object.assign(clone(DEFAULTS), v, { _previewSpeed: cfg._previewSpeed }); ease = bezier(...cfg.ease); bindSliders(); buildKeys(); changed(); $("status").textContent = "Applied"; }
+    try {
+      const v = Object.assign(clone(DEFAULTS), JSON.parse($("json").value), { _previewSpeed: cfg._previewSpeed });
+      if (mode === "play") playCfg = v; else yapCfg = v;
+      applyMode(); $("status").textContent = "Applied";
+    }
     catch (_) { $("status").textContent = "That isn't valid settings JSON"; }
   };
-  $("reset").onclick = () => { const sp = cfg._previewSpeed; cfg = clone(DEFAULTS); cfg._previewSpeed = sp; ease = bezier(...cfg.ease); bindSliders(); buildKeys(); changed(); $("status").textContent = "Reset to your design"; };
+  $("reset").onclick = () => {
+    const fresh = Object.assign(clone(DEFAULTS), { _previewSpeed: cfg._previewSpeed });
+    if (mode === "play") playCfg = fresh; else yapCfg = fresh;
+    applyMode(); $("status").textContent = "Reset to your original Paper design";
+  };
 
   // ---------- Pill bars ----------
   const bars = $("pillBars"); for (let i = 0; i < 9; i++) { const el = document.createElement("i"); bars.appendChild(el); }
+
+  // ---------- Canvas & export ----------
+  // Every mark on the canvas is a pure function of time, so the preview and the exported video are identical
+  // and each animation lands exactly where it started: the video loops without a seam.
+  const COMP_DEFAULTS = {
+    aspect: "1:1", res: 1080, bg: "#ffffff", transparent: false, layout: "auto", gap: 8, loops: 2, fps: 60, count: 1,
+    marks: [
+      { ink: "#111111", state: "loop", size: 62, offset: 0 },
+      { ink: "#d2603a", state: "listening", size: 62, offset: 0.33 },
+      { ink: "#2f5bd3", state: "thinking", size: 62, offset: 0.66 },
+    ],
+  };
+  let comp = Object.assign(clone(COMP_DEFAULTS), store.get("yap-mark-lab-canvas") || {});
+  comp.marks = COMP_DEFAULTS.marks.map((m, i) => Object.assign(clone(m), (comp.marks || [])[i] || {}));
+  const saveComp = () => store.set("yap-mark-lab-canvas", comp);
+  const EXPORT_STATES = ["loop", "listening", "thinking", "pasted", "idle", "recording", "startup"];
+  const TAU = Math.PI * 2;
+
+  // Simulated voice with frequencies snapped to the period D, so it repeats exactly.
+  function voiceAt(t, D) {
+    const f1 = Math.max(1, Math.round(13 * D / TAU)) * TAU / D, f2 = Math.max(1, Math.round(2.3 * D / TAU)) * TAU / D;
+    return Math.max(0, Math.sin(t * f1)) * (Math.sin(t * f2) > -0.35 ? 1 : 0.05);
+  }
+  const listenCache = new Map();
+  function listenTable(D) {          // cumulative loop-phase over one period, normalised to whole loops
+    const st = cfg.states, L = loopLength();
+    const key = [D, L, st.listenBase, st.listenMax].join();
+    if (listenCache.has(key)) return listenCache.get(key);
+    const N = Math.max(240, Math.ceil(D * 240)), tab = new Float64Array(N + 1);
+    for (let i = 1; i <= N; i++) {
+      const t = (i - 0.5) / N * D;
+      tab[i] = tab[i - 1] + (st.listenBase + (st.listenMax - st.listenBase) * voiceAt(t, D)) * D / N;
+    }
+    const loops = Math.max(1, Math.round(tab[N] / L)), k = loops * L / tab[N];
+    for (let i = 0; i <= N; i++) tab[i] *= k;
+    listenCache.clear(); listenCache.set(key, tab);
+    return tab;
+  }
+  function meanListenRate() {
+    const st = cfg.states; let a = 0; const D = 20;
+    for (let i = 0; i < 2000; i++) a += voiceAt(i / 2000 * D, D);
+    return st.listenBase + (st.listenMax - st.listenBase) * a / 2000;
+  }
+  const PASTE_STEP = 1.1;            // seconds per keyframe in the exported "pasted" animation
+  function periodOf(stateKey) {      // one seamless cycle, in seconds
+    const st = cfg.states, L = loopLength();
+    switch (stateKey) {
+      case "loop": return L;
+      case "thinking": return L / st.thinkSpeed;
+      case "listening": return L / Math.max(0.05, meanListenRate());   // about one loop at the average speaking pace
+      case "pasted": return Math.max(1, chain().frames.length - 1) * Math.max(PASTE_STEP, st.pasteMs / 1000 + 0.3);
+      case "idle": case "recording": return 12;
+      case "startup": return st.startMs / 1000 + 1.6;
+    }
+    return L;
+  }
+  function markAt(stateKey, t, D) {  // rings + drawing options at time t of a cycle of length D
+    const st = cfg.states;
+    t = ((t % D) + D) % D;
+    const slow = (i) => [Math.round(D * 0.9 / TAU) || 1, Math.round(D * 0.7 / TAU) || 1][i] * TAU / D;
+    const driftP = (rings, amt) => rings.map((p, i) => [p[0] + amt * Math.sin(t * slow(0) + i * 2.1), p[1] + amt * Math.cos(t * slow(1) + i * 1.7)]);
+    switch (stateKey) {
+      case "loop": return { rings: ringsAtLoop(t * loopLength() / D).rings };
+      case "thinking": return { rings: ringsAtLoop(t * loopLength() / D).rings };
+      case "listening": {
+        const tab = listenTable(D), x = t / D * (tab.length - 1), i = Math.floor(x), f = x - i;
+        const ph = tab[i] + ((tab[Math.min(i + 1, tab.length - 1)] - tab[i]) * f);
+        return { rings: ringsAtLoop(ph).rings, voice: voiceAt(t, D) };
+      }
+      case "pasted": {
+        const { frames } = chain(), n = Math.max(1, frames.length - 1), step = D / n;
+        const i = Math.min(n - 1, Math.floor(t / step)), local = t - i * step;
+        const roll = Math.min(1, local / (st.pasteMs / 1000));
+        return { rings: lerp(frames[i], frames[i + 1] || frames[i], easeOut(roll)) };
+      }
+      case "idle": return { rings: driftP(framesForIdle(), st.idleDrift) };
+      case "recording": {
+        const k = Math.max(1, Math.round(D / (st.recPulseMs / 1000)));
+        const ph = t / D * k * TAU, w = 0.5 + 0.5 * Math.cos(ph);
+        return { rings: driftP(framesForIdle(), st.idleDrift * 0.6), alpha: 0.78 + 0.22 * w, scale: 1 + 0.015 * w };
+      }
+      case "startup": {
+        const p = Math.min(1, t / (st.startMs / 1000)), e = easeOut(p);
+        const rings = framesForIdle().map(([x, y], i) => {
+          const ang = Math.atan2(y || -1, x || 0.001) + i * 0.4, far = 330;
+          return [x + (Math.cos(ang) * far - x) * (1 - e), y + (Math.sin(ang) * far - y) * (1 - e)];
+        });
+        return { rings, rimProgress: easeOut(Math.min(1, p * 1.25)) };
+      }
+    }
+  }
+
+  function compSize(res = comp.res) {
+    const [a, b] = comp.aspect.split(":").map(Number);
+    const even = (v) => Math.max(2, Math.round(v / 2) * 2);
+    return a >= b ? { W: even(res * a / b), H: even(res) } : { W: even(res), H: even(res * b / a) };
+  }
+  function compTiming() {            // total length, and per-mark speed so every mark completes whole cycles
+    const active = comp.marks.slice(0, comp.count);
+    const total = periodOf(active[0].state) * comp.loops;
+    return {
+      total,
+      cycles: active.map((m) => { const D = periodOf(m.state); return { D, n: Math.max(1, Math.round(total / D)) }; }),
+    };
+  }
+  function layoutMarks(W, H) {
+    const active = comp.marks.slice(0, comp.count), n = active.length, short = Math.min(W, H);
+    let dir = comp.layout === "auto" ? (W >= H ? "row" : "column") : comp.layout;
+    if (n === 1) dir = "row";
+    const gap = comp.gap / 100 * short;
+    let ds = active.map((m) => m.size / 100 * short);
+    if (dir === "row" || dir === "column") {
+      const room = (dir === "row" ? W : H) * 0.92, cross = (dir === "row" ? H : W) * 0.92;
+      const need = ds.reduce((a, b) => a + b, 0) + gap * (n - 1);
+      const k = Math.min(1, room / need, cross / Math.max(...ds));
+      ds = ds.map((d) => d * k);
+      const g = gap * k, totalLen = ds.reduce((a, b) => a + b, 0) + g * (n - 1);
+      let pos = ((dir === "row" ? W : H) - totalLen) / 2;
+      return ds.map((d) => {
+        const c = pos + d / 2; pos += d + g;
+        return dir === "row" ? { x: c, y: H / 2, d } : { x: W / 2, y: c, d };
+      });
+    }
+    // stacked: overlapping, centred, nudged apart by the spacing
+    return ds.map((d, i) => ({ x: W / 2 + (i - (n - 1) / 2) * gap * 1.6, y: H / 2, d }));
+  }
+  const markScratch = [0, 1, 2].map(() => document.createElement("canvas"));
+  function renderComp(target, W, H, t, { transparent = false } = {}) {
+    if (target.width !== W || target.height !== H) { target.width = W; target.height = H; }
+    const g = target.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, W, H);
+    if (!transparent) { g.fillStyle = comp.bg; g.fillRect(0, 0, W, H); }
+    const { total, cycles } = compTiming(), slots = layoutMarks(W, H);
+    comp.marks.slice(0, comp.count).forEach((m, i) => {
+      const { D, n } = cycles[i];
+      const local = (t / total) * n * D + m.offset * D;      // whole cycles over the video: seamless
+      const r = markAt(m.state, local, D);
+      const { x, y, d } = slots[i], sc = r.scale ?? 1, px = Math.round(d * sc);
+      drawMark(markScratch[i], 0, r.rings, { px, ink: m.ink, alpha: r.alpha, rimProgress: r.rimProgress });
+      g.drawImage(markScratch[i], x - px / 2, y - px / 2, px, px);
+    });
+  }
+
+  // Controls
+  function bindComp() {
+    const set = (id, key, fmt, num = true) => {
+      const el = $(id); el.value = comp[key];
+      const show = () => { if ($(id + "Out")) $(id + "Out").textContent = fmt ? fmt(comp[key]) : ""; };
+      show();
+      el.oninput = el.onchange = () => { comp[key] = num ? +el.value : el.value; show(); saveComp(); compInfo(); };
+    };
+    set("aspect", "aspect", null, false); set("res", "res"); set("bg", "bg", null, false);
+    set("layout", "layout", null, false); set("gap", "gap", (v) => `${v}%`);
+    set("loops", "loops", (v) => `${v}×`); set("fps", "fps");
+    $("transparent").checked = comp.transparent;
+    $("transparent").onchange = () => { comp.transparent = $("transparent").checked; saveComp(); };
+    const seg = $("countSeg"); seg.innerHTML = "";
+    [1, 2, 3].forEach((n) => {
+      const b = document.createElement("button"); b.textContent = n === 1 ? "1 mark" : `${n} marks`;
+      b.setAttribute("aria-pressed", comp.count === n);
+      b.onclick = () => { comp.count = n; saveComp(); bindComp(); };
+      seg.appendChild(b);
+    });
+    const rows = $("markRows"); rows.innerHTML = "";
+    comp.marks.slice(0, comp.count).forEach((m, i) => {
+      const row = document.createElement("div"); row.className = "mark-row";
+      row.innerHTML = `<span class="tag">Mark ${i + 1}</span>
+        <span class="fields">
+          <input type="color" aria-label="Mark ${i + 1} colour" value="${m.ink}">
+          <select aria-label="Mark ${i + 1} animation">${EXPORT_STATES.map((k) => `<option value="${k}" ${k === m.state ? "selected" : ""}>${STATES[k].label}</option>`).join("")}</select>
+        </span>
+        <label class="sl">Size<input type="range" min="15" max="95" step="1" value="${m.size}"><output>${m.size}%</output></label>
+        <label class="sl">Offset<input type="range" min="0" max="0.99" step="0.01" value="${m.offset}"><output>${Math.round(m.offset * 100)}%</output></label>`;
+      const [color] = row.querySelectorAll("input[type=color]"), sel = row.querySelector("select");
+      const [size, off] = row.querySelectorAll("input[type=range]"), [so, oo] = row.querySelectorAll("output");
+      color.oninput = () => { m.ink = color.value; saveComp(); };
+      sel.onchange = () => { m.state = sel.value; saveComp(); compInfo(); };
+      size.oninput = () => { m.size = +size.value; so.textContent = `${m.size}%`; saveComp(); };
+      off.oninput = () => { m.offset = +off.value; oo.textContent = `${Math.round(m.offset * 100)}%`; saveComp(); };
+      rows.appendChild(row);
+    });
+    compInfo();
+  }
+  function compInfo() {
+    const { W, H } = compSize(), { total } = compTiming();
+    $("compInfo").textContent = `${W}×${H} · ${total.toFixed(2)} s · ${comp.fps} fps`;
+    $("loopNote").textContent = comp.count > 1 ? "The length follows mark 1. The others are timed to finish whole cycles, so the video loops cleanly." : "The video ends exactly where it began, so it loops cleanly.";
+  }
+
+  // Preview
+  let compClock = 0;
+  function drawCompPreview(dt) {
+    const { W, H } = compSize(), { total } = compTiming();
+    compClock = (compClock + dt) % total;
+    const box = $("comp"), maxW = Math.min(box.parentElement.clientWidth - 20, 900), maxH = 360;
+    const k = Math.min(maxW / W, maxH / H), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const pw = Math.max(2, Math.round(W * k * dpr)), ph = Math.max(2, Math.round(H * k * dpr));
+    box.style.width = `${Math.round(W * k)}px`; box.style.height = `${Math.round(H * k)}px`;
+    renderComp(box, pw, ph, compClock, { transparent: comp.transparent });
+  }
+
+  // Export
+  let exporting = false;
+  const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  function setProgress(f) { $("progress").hidden = f == null; $("progress").firstElementChild.style.width = `${Math.round((f || 0) * 100)}%`; }
+  async function deliver(blob, filename, kind) {
+    const result = $("result"); result.innerHTML = "";
+    let dl = null;
+    try { dl = await (window.claude?.use?.("downloads") ?? null); } catch (_) { dl = null; }
+    if (dl) {
+      try {
+        await dl.save({ filename, data: blob });
+        $("status").textContent = `Saved ${filename}`;
+      } catch (e) {
+        $("status").textContent = e?.code === "declined" ? "Save cancelled" : e?.code === "too_large" ? "That file is too large to save: try a smaller size or fewer loops" : "Couldn't save the file";
+      }
+    } else {
+      $("status").textContent = "Saving isn't available here: right-click the result below to save it";
+    }
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement(kind === "video" ? "video" : "img");
+    el.src = url;
+    if (kind === "video") { el.autoplay = el.loop = el.muted = el.controls = true; el.playsInline = true; }
+    el.alt = filename;
+    result.appendChild(el);
+  }
+  async function pickCodec(W, H, fps, bitrate) {
+    if (!("VideoEncoder" in window) || !window.Mp4Muxer) return null;
+    for (const codec of ["avc1.640028", "avc1.640032", "avc1.640033", "avc1.64003C", "avc1.4d0034"]) {
+      const config = { codec, width: W, height: H, bitrate, framerate: fps, avc: { format: "avc" } };
+      try { const r = await VideoEncoder.isConfigSupported(config); if (r.supported) return config; } catch (_) {}
+    }
+    return null;
+  }
+  async function exportVideo() {
+    if (exporting) return; exporting = true;
+    const btn = $("exportVideo"); btn.disabled = true; btn.textContent = "Rendering…";
+    try {
+      const { W, H } = compSize(), { total } = compTiming(), fps = comp.fps;
+      const frames = Math.round(total * fps), canvas = document.createElement("canvas");
+      const bitrate = Math.min(40e6, Math.round(W * H * fps * 0.12));
+      const config = await pickCodec(W, H, fps, bitrate);
+      setProgress(0);
+      if (config) {
+        const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: "avc", width: W, height: H, frameRate: fps }, fastStart: "in-memory" });
+        let failure = null;
+        const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failure = e; } });
+        enc.configure(config);
+        for (let n = 0; n < frames; n++) {
+          if (failure) throw failure;
+          renderComp(canvas, W, H, n / fps);
+          const vf = new VideoFrame(canvas, { timestamp: Math.round(n * 1e6 / fps), duration: Math.round(1e6 / fps) });
+          enc.encode(vf, { keyFrame: n % fps === 0 }); vf.close();
+          while (enc.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 1));
+          if (n % 6 === 0) { setProgress(n / frames); await new Promise((r) => setTimeout(r, 0)); }
+        }
+        await enc.flush(); enc.close(); muxer.finalize();
+        if (failure) throw failure;
+        setProgress(null);
+        await deliver(new Blob([muxer.target.buffer], { type: "video/mp4" }), `yap-mark-${stamp()}.mp4`, "video");
+      } else if (canvas.captureStream && window.MediaRecorder) {
+        // Fallback: record in real time to WebM.
+        renderComp(canvas, W, H, 0);
+        const stream = canvas.captureStream(fps), chunks = [];
+        const type = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t));
+        const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: bitrate });
+        rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+        const done = new Promise((r) => { rec.onstop = r; });
+        rec.start();
+        const t0 = performance.now();
+        await new Promise((resolve) => {
+          const tick = () => {
+            const t = (performance.now() - t0) / 1000;
+            if (t >= total) { resolve(); return; }
+            renderComp(canvas, W, H, t); setProgress(t / total); requestAnimationFrame(tick);
+          };
+          tick();
+        });
+        rec.stop(); await done; setProgress(null);
+        await deliver(new Blob(chunks, { type: "video/webm" }), `yap-mark-${stamp()}.webm`, "video");
+      } else {
+        $("status").textContent = "This browser can't make videos: try Chrome or Safari";
+      }
+    } catch (e) {
+      setProgress(null);
+      $("status").textContent = `Video export failed: ${e?.message || e}. Try a smaller size.`;
+    } finally {
+      exporting = false; btn.disabled = false; btn.textContent = "Export video";
+    }
+  }
+  $("exportVideo").onclick = exportVideo;
+  $("exportPng").onclick = () => {
+    const { W, H } = compSize(), c = document.createElement("canvas");
+    renderComp(c, W, H, compClock, { transparent: comp.transparent });
+    c.toBlob((b) => b && deliver(b, `yap-mark-${stamp()}.png`, "image"), "image/png");
+  };
+  bindComp();
 
   // ---------- Frame loop ----------
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -621,6 +1025,7 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
     drawMark($("mbDark"), 18, r.rings, { ...opt, ink: state === "recording" ? opt.ink : "#f2f2f2" });
     drawMark($("pillMark"), 20, r.rings, { ...opt, ink: state === "recording" ? opt.ink : "#ffffff" });
     drawMark($("dock"), 48, r.rings, { ...opt });
+    if (!exporting) drawCompPreview(playing && !reduce ? dt : 0);
     // pill waveform reacts in listening
     const lvl = state === "listening" ? voice : state === "thinking" ? 0.15 : 0.05;
     [...bars.children].forEach((el, i) => { const d = Math.abs(i - 4) / 4; el.style.height = `${Math.max(3, 18 * lvl * (1 - d * 0.6) * (0.7 + 0.3 * Math.sin(now / 90 + i)))}px`; });
@@ -644,7 +1049,7 @@ textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-
     requestAnimationFrame(frame);
   }
 
-  bindSliders(); buildStates(); buildKeys(); changed();
+  applyMode(); buildStates();
   window.addEventListener("resize", drawCurve);
   requestAnimationFrame(frame);
 })();
