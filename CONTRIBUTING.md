@@ -43,6 +43,17 @@ Run the binary directly with these flags (`build/Yap.app/Contents/MacOS/Yap …`
 | `--slowmo <n>` | Plays Flow bar animations n× slower, for frame-by-frame review |
 | `--settings` | Opens Settings on launch |
 
+Environment: `YAP_MOTION_TRACE=1` prints per-frame timing and ring travel for the mark animation (smoothness checks).
+
+Design tools in `scripts/`:
+
+| Script | What it does |
+|---|---|
+| `mark-video.swift` | Renders the mark morph to MP4 (`swift scripts/mark-video.swift out.mp4 [speed] [loops] [size]`) |
+| `render-glass-icon.sh` | Renders `Resources/AppIcon.icon` with Icon Composer's Liquid Glass renderer and installs it as the static icon |
+| `icon-from-paper.swift` | Renders the flat icon variants from `design/icon-glass/paper` |
+| `set-icon.sh` | Turns a 1024 PNG into `Resources/AppIcon.icns` |
+
 `~/Library/Logs/Yap.log` records permission state, key events, timings and errors (never dictated text).
 
 ## Guidelines

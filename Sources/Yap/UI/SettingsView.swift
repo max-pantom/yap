@@ -52,6 +52,7 @@ private struct GeneralTab: View {
     @EnvironmentObject var model: AppModel
     @AppStorage(Prefs.Key.sounds) var sounds = true
     @AppStorage(Prefs.Key.showFlowBar) var showFlowBar = true
+    @AppStorage(Prefs.Key.startupAnimation) var startupAnimation = true
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -62,6 +63,7 @@ private struct GeneralTab: View {
             Text("The little pill on your screen. Click it to dictate, drag it to move it. It grows into a waveform while you talk.")
                 .font(.caption).foregroundStyle(.secondary)
             Button("Reset Flow bar position") { FlowBar.shared.resetPosition() }
+            Toggle("Play the mark animation when Yap starts", isOn: $startupAnimation)
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, on in
                     do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }

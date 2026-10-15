@@ -59,9 +59,9 @@ final class FlowBar {
         guard let panel, panel.isVisible, let controller else { return nil }
         let size: CGSize = switch controller.phase {
         case .idle: hover.isHovering ? CGSize(width: 290, height: 40) : CGSize(width: 90, height: 30)
-        case .listening: CGSize(width: 150, height: 46)
-        case .locked: CGSize(width: 210, height: 50)
-        case .thinking: CGSize(width: 110, height: 42)
+        case .listening: CGSize(width: 180, height: 46)
+        case .locked: CGSize(width: 236, height: 50)
+        case .thinking: CGSize(width: 90, height: 42)
         }
         let f = panel.frame
         return NSRect(x: f.midX - size.width / 2, y: f.minY, width: size.width, height: size.height)
@@ -301,17 +301,20 @@ struct FlowBarView: View {
             .opacity(mode == .hover ? 1 : 0)
             .scaleEffect(mode == .hover || reduce ? 1 : 0.95)
 
-            HStack(spacing: 8) {
-                if controller.isCommand {
+            // One mark for listening and thinking: beside the waveform while it hears you, then the waveform
+            // folds away and the same mark slides to the centre while it generates. Never swapped, so never jumps.
+            HStack(spacing: hearing ? 9 : 0) {
+                if controller.isCommand && hearing {
                     Image(systemName: "wand.and.stars").font(.system(size: 11, weight: .bold)).foregroundStyle(accent)
                 }
-                LiveWaveform(color: hearing ? accent : .white, thinking: !hearing,
-                             active: hearing || mode == .thinking)
-                    .frame(width: hearing ? 92 : 60, height: hearing ? 24 : 18)
+                MarkView(size: 20, color: controller.isCommand ? NSColor(accent) : .white)
+                LiveWaveform(color: accent, thinking: false, active: hearing)
+                    .frame(width: hearing ? 86 : 0, height: 24)
+                    .opacity(hearing ? 1 : 0)
             }
             .fixedSize()
             .opacity(hearing || mode == .thinking ? 1 : 0)
-            .scaleEffect(hearing || mode == .thinking || reduce ? 1 : 0.95)
+            .scaleEffect(hearing || mode == .thinking || reduce ? 1 : 0.92)
 
             // Pinned to the pill's own edges (not the widest content), so they ride in as it widens.
             HStack {
@@ -330,9 +333,9 @@ struct FlowBarView: View {
         switch mode {
         case .idle: CGSize(width: 40, height: 8)
         case .hover: CGSize(width: hover.isDragging ? 150 : 280, height: 28)
-        case .listening: CGSize(width: controller.isCommand ? 136 : 116, height: 36)
-        case .locked: CGSize(width: 184, height: 40)
-        case .thinking: CGSize(width: 88, height: 30)
+        case .listening: CGSize(width: controller.isCommand ? 166 : 146, height: 36)
+        case .locked: CGSize(width: 212, height: 40)
+        case .thinking: CGSize(width: 56, height: 32)
         }
     }
 

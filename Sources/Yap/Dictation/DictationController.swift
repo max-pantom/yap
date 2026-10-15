@@ -183,6 +183,7 @@ final class DictationController: ObservableObject {
         Log.write("delivered \(result) ax=\(AXIsProcessTrusted()) post=\(CGPreflightPostEventAccess()) after \(String(format: "%.2f", Date().timeIntervalSince(stoppedAt)))s (speech→text \(String(format: "%.2f", heardAt.timeIntervalSince(stoppedAt)))s)")
         history.add(.init(raw: raw, text: output, app: appName, duration: duration, isCommand: isCommand))
         reset()
+        MarkMotion.shared.play(.pasted)
         let kept = UserDefaults.standard.bool(forKey: Prefs.Key.keepOnClipboard)
         switch result {
         case .pasted where kept: show("Pasted · also on your clipboard", symbol: "checkmark.circle.fill", error: false, seconds: 1.4)

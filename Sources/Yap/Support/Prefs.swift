@@ -21,6 +21,7 @@ enum Prefs {
         static let bubbleSize = "rec.bubbleSize"
         static let onboarded = "general.onboarded"
         static let showFlowBar = "general.showFlowBar"
+        static let startupAnimation = "general.startupAnimation"
         static let keepOnClipboard = "dictation.keepOnClipboard"
         static let flowBarX = "flowbar.x"   // fraction of screen width (pill centre)
         static let flowBarY = "flowbar.y"   // fraction of screen height (bottom edge)
@@ -53,6 +54,7 @@ enum Prefs {
             Key.bubbleSize: 220.0,
             Key.onboarded: false,
             Key.showFlowBar: true,
+            Key.startupAnimation: true,
             Key.keepOnClipboard: true,
             Key.speechEngine: "apple",
             Key.llmProvider: "apple",

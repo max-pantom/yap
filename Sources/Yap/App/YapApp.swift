@@ -14,7 +14,7 @@ struct YapApp: App {
         MenuBarExtra {
             MenuContent().environmentObject(model)
         } label: {
-            Image(systemName: model.menuSymbol)
+            Image(nsImage: model.menuImage)
         }
     }
 }
@@ -34,7 +34,8 @@ final class AppModel: ObservableObject {
     lazy var dictation = DictationController(history: history)
     lazy var recorder = RecordingController(library: library)
 
-    @Published private(set) var menuSymbol = "waveform"
+    /// The live mark in the menu bar (a template image, so macOS tints it for light and dark bars).
+    @Published private(set) var menuImage = MarkRenderer.menuBarImage(MarkMotion.shared.frame)
     private var windows: [String: NSWindow] = [:]
     private var hotKeys = GlobalHotKeys()
     private var observers: [Any] = []
@@ -49,14 +50,24 @@ final class AppModel: ObservableObject {
             MainActor.assumeIsolated { AppModel.shared.registerGlobalHotKeys() }
         })
 
-        observers.append(recorder.$phase.combineLatest(dictation.$phase).sink { [weak self] rec, dic in
-            self?.menuSymbol = switch (rec, dic) {
-            case (.recording, _), (.countdown, _): "record.circle.fill"
-            case (.processing, _): "sparkles"
-            case (_, .idle): "waveform"
-            default: "waveform.badge.mic"
+        // What the mark does follows what Yap is doing.
+        observers.append(recorder.$phase.combineLatest(dictation.$phase).sink { rec, dic in
+            let state: MarkMotion.State = switch (rec, dic) {
+            case (.recording, _), (.countdown, _): .recording
+            case (_, .listening), (_, .locked): .listening
+            case (_, .thinking), (.processing, _): .thinking
+            default: .idle
             }
+            MarkMotion.shared.set(state)
         })
+        // The menu bar redraws at most 30×/s, and only while the mark is moving.
+        observers.append(MarkMotion.shared.$frame
+            .throttle(for: .milliseconds(33), scheduler: RunLoop.main, latest: true)
+            .sink { [weak self] f in self?.menuImage = MarkRenderer.menuBarImage(f) })
+
+        if UserDefaults.standard.bool(forKey: Prefs.Key.startupAnimation), !CommandLine.arguments.contains("--demo-bar") {
+            Splash.show()
+        }
 
         if let i = CommandLine.arguments.firstIndex(of: "--demo-bar"), i + 1 < CommandLine.arguments.count {
             dictation.demo(CommandLine.arguments[i + 1])

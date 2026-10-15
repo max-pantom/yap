@@ -45,6 +45,12 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 A small pill that lives at the bottom of your screen. It shows a live waveform and your words as you talk, and the
 controls in hands-free mode. Click it to dictate, drag it anywhere. It never steals focus and respects Reduce Motion.
 
+### The mark
+Yap's logo is a ball with three rings sliding inside it. It's drawn live, not from images, and moves with what Yap is
+doing: it rolls in at startup, rests in the menu bar, flows faster the louder you talk, loops while generating, does
+one quick roll when your text lands, and pulses red while recording. Timing and shape come from a tuning tool
+(`design/mark/lab.html`) and live in `design/mark/mark-config.json`.
+
 ### Models (Settings → Models)
 | Job | Default | Optional |
 |---|---|---|
@@ -70,7 +76,9 @@ cd yap
 open /Applications/Yap.app
 ```
 
-`./build.sh` alone builds `build/Yap.app` without installing. The app is ad-hoc signed; the build pins its code
+`./build.sh` alone builds `build/Yap.app` without installing. With Xcode 26 installed, the build also compiles the
+Liquid Glass app icon (`Resources/AppIcon.icon`, made in Icon Composer) so it adapts to light, dark, tinted and clear
+modes; with only the Command Line Tools it uses a static render of the same icon. The app is ad-hoc signed; the build pins its code
 requirement to the bundle identifier, so macOS privacy permissions survive rebuilds.
 
 ### Permissions

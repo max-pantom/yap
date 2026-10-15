@@ -1,0 +1,651 @@
+<title>Yap Mark Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a drafting-table split: the live stage on the left, the control rail on the right; stacks on phones. */
+:root {
+  --bg: #ffffff;
+  --panel: #f6f6f4;
+  --line: #e4e3df;
+  --ink: #111111;
+  --muted: #6b6a66;
+  --accent: #d2603a;          /* Yap clay */
+  --accent-ink: #ffffff;
+  --stage: #ffffff;
+  --menubar: #ececec;
+  --menubar-ink: #111111;
+  --menubar-dark: #2a2a2c;
+  --font-display: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121212; --panel: #1b1b1b; --line: #2c2c2b; --ink: #f2f1ee; --muted: #9c9a94;
+    --accent: #e57a55; --accent-ink: #1a0d07; --stage: #1a1a1a; --menubar: #ececec; --menubar-ink: #111111; --menubar-dark: #2a2a2c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121212; --panel: #1b1b1b; --line: #2c2c2b; --ink: #f2f1ee; --muted: #9c9a94;
+  --accent: #e57a55; --accent-ink: #1a0d07; --stage: #1a1a1a; --menubar: #ececec; --menubar-ink: #111111; --menubar-dark: #2a2a2c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-display); font-size: 14px; }
+.wrap { padding-block: 20px 40px; padding-inline: max(16px, 3vw); display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; align-items: start; }
+@media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--muted); font-weight: 500; }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 62ch; line-height: 1.5; }
+.save-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.status { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+button { font: inherit; font-weight: 500; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.icon { padding: 7px 10px; font-family: var(--font-mono); }
+button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* Stage */
+.stage { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.hero { background: var(--stage); border: 1px solid var(--line); border-radius: 14px; display: grid; place-items: center; padding: 28px 16px 20px; position: relative; }
+#big { width: min(420px, 100%); aspect-ratio: 1; max-width: 100%; touch-action: none; }
+.hero .badge { position: absolute; top: 12px; left: 14px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.hero .hint { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 1.4em; text-align: center; }
+
+.transport { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.transport input[type=range] { flex: 1 1 200px; min-width: 0; }
+.time { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+
+.keys { display: flex; gap: 8px; flex-wrap: wrap; }
+.keys button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; }
+.keys canvas { width: 56px; height: 56px; }
+.keys .k-label { font-family: var(--font-mono); font-size: 11px; }
+.keys button.off { opacity: 0.35; }
+.keys button.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.previews { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.pv { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pv .cap { font-size: 12px; color: var(--muted); }
+.menubar { height: 26px; border-radius: 6px; background: var(--menubar); display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 10px; color: var(--menubar-ink); font-size: 12px; font-weight: 500; }
+.menubar.dark { background: var(--menubar-dark); color: #f2f2f2; }
+.menubar canvas { width: 18px; height: 18px; }
+.flowbar { height: 54px; display: grid; place-items: center; background: linear-gradient(160deg, #f1d9cc, #c9b7d8); border-radius: 8px; }
+.pill { height: 34px; padding: 0 14px; border-radius: 17px; background: rgba(0,0,0,0.88); display: flex; align-items: center; gap: 10px; }
+.pill canvas { width: 20px; height: 20px; }
+.pill .bars { display: flex; gap: 2px; align-items: center; }
+.pill .bars i { width: 3px; border-radius: 2px; background: #fff; display: block; }
+.dockcell { display: grid; place-items: center; height: 54px; }
+.dockcell canvas { width: 48px; height: 48px; }
+
+/* Controls */
+.rail { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 16px 16px; display: flex; flex-direction: column; min-width: 0; }
+details { border-bottom: 1px solid var(--line); padding-block: 10px; }
+details:last-of-type { border-bottom: 0; }
+summary { cursor: pointer; font-weight: 600; font-size: 13px; letter-spacing: 0.01em; list-style: none; display: flex; justify-content: space-between; align-items: center; padding-block: 4px; }
+summary::after { content: "+"; font-family: var(--font-mono); color: var(--muted); }
+details[open] summary::after { content: "–"; }
+.ctl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding-block: 7px; }
+.ctl label { font-size: 13px; }
+.ctl output { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ctl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.ctl select { grid-column: 1 / -1; font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.ctl .note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; padding-block: 8px; }
+.seg button { padding: 6px 10px; font-size: 13px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; padding-block: 6px; }
+.chk { display: flex; gap: 8px; align-items: center; padding-block: 6px; font-size: 13px; }
+.chk input { accent-color: var(--accent); }
+.curve { width: 100%; height: 96px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+textarea#json { width: 100%; height: 140px; font-family: var(--font-mono); font-size: 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 8px; resize: vertical; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Yap Mark Lab <span>· tune the morph</span></h1>
+      <p class="sub">Your five keyframes, live. Adjust timing, easing, the liquid joins and how each app state moves. Pause on a keyframe to drag its rings. When it feels right, save it and Claude builds exactly this into Yap.</p>
+    </div>
+    <div class="save-row">
+      <span class="status" id="status">Not saved yet</span>
+      <button id="copy">Copy settings</button>
+      <button class="primary" id="save">Save for Yap</button>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="Preview">
+    <div class="hero">
+      <span class="badge" id="badge">Loop</span>
+      <canvas id="big" aria-label="Animated Yap mark"></canvas>
+      <div class="hint" id="hint">Pause on a keyframe to drag its rings.</div>
+    </div>
+
+    <div class="transport">
+      <button class="icon" id="play" aria-label="Play or pause">❚❚</button>
+      <button class="icon" id="prev" aria-label="Previous keyframe">◀</button>
+      <button class="icon" id="next" aria-label="Next keyframe">▶</button>
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Scrub through the loop">
+      <span class="time" id="time">0.00 s</span>
+    </div>
+
+    <div class="keys" id="keys" aria-label="Keyframes: click to include or skip in the loop"></div>
+
+    <div class="previews">
+      <div class="pv"><div class="menubar"><span>Tue 9:41</span><canvas id="mbLight"></canvas></div><div class="menubar dark"><span>Tue 9:41</span><canvas id="mbDark"></canvas></div><span class="cap">Menu bar, light and dark (18 pt)</span></div>
+      <div class="pv"><div class="flowbar"><div class="pill"><canvas id="pillMark"></canvas><div class="bars" id="pillBars"></div></div></div><span class="cap">Flow bar pill (20 pt)</span></div>
+      <div class="pv"><div class="dockcell"><canvas id="dock"></canvas></div><span class="cap">Small app size (48 pt)</span></div>
+    </div>
+  </section>
+
+  <aside class="rail" aria-label="Controls">
+    <details open>
+      <summary>Preview state</summary>
+      <div class="seg" id="states"></div>
+      <div class="ctl" id="stateNote"><span class="note"></span></div>
+      <div class="row" id="stateActions"></div>
+    </details>
+
+    <details open>
+      <summary>Timing</summary>
+      <div class="ctl"><label for="hold">Rest on each keyframe</label><output id="holdOut"></output><input type="range" id="hold" min="0" max="1500" step="10"></div>
+      <div class="ctl"><label for="move">Travel between keyframes</label><output id="moveOut"></output><input type="range" id="move" min="120" max="2400" step="10"></div>
+      <div class="ctl"><label for="speed">Preview speed</label><output id="speedOut"></output><input type="range" id="speed" min="0.1" max="2" step="0.05"></div>
+      <div class="chk"><input type="checkbox" id="pingpong"><label for="pingpong">Ping-pong (play back instead of looping 5 → 1)</label></div>
+    </details>
+
+    <details open>
+      <summary>Easing</summary>
+      <div class="ctl"><label for="easePreset">Curve</label><span></span>
+        <select id="easePreset">
+          <option value="0.77,0,0.175,1">Strong ease-in-out (on-screen movement)</option>
+          <option value="0.65,0,0.35,1">Gentle ease-in-out</option>
+          <option value="0.23,1,0.32,1">Strong ease-out (snappy arrive)</option>
+          <option value="0.32,0.72,0,1">Drawer (iOS-like)</option>
+          <option value="0,0,1,1">Linear</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </div>
+      <canvas class="curve" id="curve" aria-label="Easing curve"></canvas>
+      <div id="customEase" hidden>
+        <div class="ctl"><label for="x1">x1</label><output id="x1Out"></output><input type="range" id="x1" min="0" max="1" step="0.01"></div>
+        <div class="ctl"><label for="y1">y1</label><output id="y1Out"></output><input type="range" id="y1" min="-0.5" max="1.5" step="0.01"></div>
+        <div class="ctl"><label for="x2">x2</label><output id="x2Out"></output><input type="range" id="x2" min="0" max="1" step="0.01"></div>
+        <div class="ctl"><label for="y2">y2</label><output id="y2Out"></output><input type="range" id="y2" min="-0.5" max="1.5" step="0.01"></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Look</summary>
+      <div class="ctl"><label for="stroke">Line weight</label><output id="strokeOut"></output><input type="range" id="stroke" min="3" max="16" step="0.2"></div>
+      <div class="ctl"><label for="rim">Outline weight</label><output id="rimOut"></output><input type="range" id="rim" min="3" max="18" step="0.2"></div>
+      <div class="ctl"><label for="fillet">Join softness</label><output id="filletOut"></output><input type="range" id="fillet" min="0" max="16" step="0.2"></div>
+      <div class="ctl"><label for="fullness">Join fullness</label><output id="fullnessOut"></output><input type="range" id="fullness" min="0.4" max="0.9" step="0.01"><span class="note">Softness spreads the liquid joins; fullness decides how much ink pools where lines meet.</span></div>
+      <div class="ctl"><label for="smallBoost">Small-size line boost</label><output id="smallBoostOut"></output><input type="range" id="smallBoost" min="1" max="2.5" step="0.05"><span class="note">Thickens lines in the menu bar and pill so they survive at 18 pt.</span></div>
+    </details>
+
+    <details>
+      <summary>States in the app</summary>
+      <div class="ctl"><label for="idleFrame">Idle rests on keyframe</label><output id="idleFrameOut"></output><input type="range" id="idleFrame" min="1" max="5" step="1"></div>
+      <div class="ctl"><label for="idleDrift">Idle drift</label><output id="idleDriftOut"></output><input type="range" id="idleDrift" min="0" max="30" step="1"></div>
+      <div class="ctl"><label for="listenBase">Listening speed when quiet</label><output id="listenBaseOut"></output><input type="range" id="listenBase" min="0" max="1.5" step="0.05"></div>
+      <div class="ctl"><label for="listenMax">Listening speed at full voice</label><output id="listenMaxOut"></output><input type="range" id="listenMax" min="0.5" max="5" step="0.1"></div>
+      <div class="ctl"><label for="thinkSpeed">Thinking speed</label><output id="thinkSpeedOut"></output><input type="range" id="thinkSpeed" min="0.5" max="5" step="0.1"></div>
+      <div class="ctl"><label for="pasteMs">Pasted: roll duration</label><output id="pasteMsOut"></output><input type="range" id="pasteMs" min="150" max="1500" step="10"></div>
+      <div class="ctl"><label for="startMs">Startup: slide-in duration</label><output id="startMsOut"></output><input type="range" id="startMs" min="300" max="3000" step="10"></div>
+      <div class="ctl"><label for="recPulse">Recording: pulse period</label><output id="recPulseOut"></output><input type="range" id="recPulse" min="600" max="4000" step="50"></div>
+    </details>
+
+    <details>
+      <summary>Settings as data</summary>
+      <textarea id="json" spellcheck="false" aria-label="Settings JSON"></textarea>
+      <div class="row"><button id="applyJson">Apply pasted settings</button><button id="reset">Reset to your design</button></div>
+    </details>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // ---------- Model ----------
+  // Ring centres per keyframe, relative to the ball centre, ball radius 150 (SVG y-down). From your Paper frames.
+  const DESIGN_KEYS = [
+    [[-56, 0], [-50, -86], [46, -66]],
+    [[-58, 0], [-50, -86], [-204, -48]],
+    [[-58, 0], [-138, -20], [-202, -48]],
+    [[24, -28], [60, -140], [-72, -82]],
+    [[164, -8], [-38, -150], [-160, 0]],
+  ];
+  const DEFAULTS = {
+    version: 1,
+    keys: DESIGN_KEYS,
+    enabled: [true, true, true, true, true],
+    holdMs: 350, moveMs: 650, pingpong: false,
+    ease: [0.77, 0, 0.175, 1],
+    stroke: 7.6, rim: 9, fillet: 7, fullness: 0.62, smallBoost: 1.5,
+    states: { idleFrame: 1, idleDrift: 6, listenBase: 0.15, listenMax: 2.2, thinkSpeed: 1.6, pasteMs: 420, startMs: 1100, recPulseMs: 1800 },
+  };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  let cfg = clone(DEFAULTS);
+  try { const d = localStorage.getItem("yap-mark-lab"); if (d) cfg = Object.assign(clone(DEFAULTS), JSON.parse(d)); } catch (_) {}
+
+  // ---------- Easing ----------
+  function bezier(x1, y1, x2, y2) {
+    const f = (a, b, t) => 3 * (1 - t) * (1 - t) * t * a + 3 * (1 - t) * t * t * b + t * t * t;
+    return (x) => {
+      if (x <= 0) return 0; if (x >= 1) return 1;
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; (f(x1, x2, m) < x) ? lo = m : hi = m; }
+      return f(y1, y2, (lo + hi) / 2);
+    };
+  }
+  let ease = bezier(...cfg.ease);
+  const easeOut = bezier(0.23, 1, 0.32, 1);
+
+  // ---------- Sequence & ring matching ----------
+  function sequence() {
+    const idx = cfg.keys.map((_, i) => i).filter((i) => cfg.enabled[i]);
+    if (idx.length === 0) return [0];
+    if (!cfg.pingpong) return idx.concat([idx[0]]);
+    return idx.concat(idx.slice(0, -1).reverse());
+  }
+  const perms = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  function match(a, b) {           // reorder b so each ring travels the shortest total distance from a
+    let best = b, bd = Infinity;
+    for (const p of perms) {
+      const c = p.map((i) => b[i]);
+      const d = c.reduce((s, q, i) => s + Math.hypot(q[0] - a[i][0], q[1] - a[i][1]), 0);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  }
+  function chain() {               // keyframes in play order with ring identity carried through
+    const seq = sequence();
+    const out = [cfg.keys[seq[0]]];
+    for (let i = 1; i < seq.length; i++) out.push(match(out[i - 1], cfg.keys[seq[i]]));
+    return { seq, frames: out };
+  }
+  const lerp = (a, b, e) => a.map((p, i) => [p[0] + (b[i][0] - p[0]) * e, p[1] + (b[i][1] - p[1]) * e]);
+  function loopLength() { return Math.max(1, sequence().length - 1) * (cfg.holdMs + cfg.moveMs) / 1000; }
+  function ringsAtLoop(t) {        // t in seconds of loop time
+    const { frames } = chain();
+    if (frames.length < 2) return { rings: frames[0], key: 0, atKey: true };
+    const seg = (cfg.holdMs + cfg.moveMs) / 1000;
+    const L = seg * (frames.length - 1);
+    let u = ((t % L) + L) % L;
+    const i = Math.min(frames.length - 2, Math.floor(u / seg));
+    const local = u - i * seg;
+    const hold = cfg.holdMs / 1000;
+    const e = local < hold ? 0 : ease((local - hold) / (cfg.moveMs / 1000));
+    return { rings: lerp(frames[i], frames[i + 1], e), key: i, atKey: local < hold };
+  }
+
+  // ---------- Renderer (same construction as the app) ----------
+  const work = new Map();
+  function getWork(px) {
+    if (!work.has(px)) {
+      const a = document.createElement("canvas"); a.width = a.height = px;
+      const b = document.createElement("canvas"); b.width = b.height = px;
+      work.set(px, { a, b, actx: a.getContext("2d", { willReadFrequently: false }), bctx: b.getContext("2d", { willReadFrequently: true }) });
+    }
+    return work.get(px);
+  }
+  const canFilter = (() => { try { const c = document.createElement("canvas").getContext("2d"); return "filter" in c; } catch (_) { return false; } })();
+  function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+
+  /** Draws the mark into `canvas` at `cssSize` points. */
+  function drawMark(canvas, cssSize, rings, opt = {}) {
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const px = Math.max(8, Math.round(cssSize * dpr));
+    if (canvas.width !== px) { canvas.width = canvas.height = px; }
+    const ctx = canvas.getContext("2d");
+    const small = cssSize < 40;
+    const boost = small ? cfg.smallBoost : 1;
+    const scale = opt.scale ?? 1;
+    const s = px / 300 * scale;
+    const cx = px / 2, cy = px / 2, R = 150 * s;
+    const { a, b, actx, bctx } = getWork(px);
+    // 1. rings, black on white
+    actx.setTransform(1, 0, 0, 1, 0, 0);
+    actx.fillStyle = "#fff"; actx.fillRect(0, 0, px, px);
+    actx.strokeStyle = "#000"; actx.lineWidth = cfg.stroke * boost * s;
+    for (const [x, y] of [[0, 0], ...rings]) {
+      actx.beginPath(); actx.arc(cx + x * s, cy + y * s, 145 * s, 0, Math.PI * 2); actx.stroke();
+    }
+    // 2. liquid joins: blur, then threshold into an antialiased alpha mask in the ink colour
+    bctx.setTransform(1, 0, 0, 1, 0, 0);
+    bctx.clearRect(0, 0, px, px);
+    const blur = cfg.fillet * s * (small ? 0.85 : 1);
+    if (canFilter && blur > 0.2) bctx.filter = `blur(${blur.toFixed(2)}px)`;
+    bctx.drawImage(a, 0, 0);
+    bctx.filter = "none";
+    const img = bctx.getImageData(0, 0, px, px), d = img.data;
+    const [ir, ig, ib] = hexToRgb(opt.ink || "#000000");
+    const thr = cfg.fullness, k = small ? 14 : 48;
+    const edge = 1 / Math.max(1, s * 2);
+    for (let yy = 0, i = 0; yy < px; yy++) {
+      for (let xx = 0; xx < px; xx++, i += 4) {
+        const v = d[i] / 255;
+        let al = Math.min(1, Math.max(0, (thr - v) * k + 0.5));
+        const r = Math.hypot(xx + 0.5 - cx, yy + 0.5 - cy);
+        al *= Math.min(1, Math.max(0, (R - r) * edge * 2 + 0.5));      // clip to the ball
+        d[i] = ir; d[i + 1] = ig; d[i + 2] = ib; d[i + 3] = al * 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+    // 3. compose: optional ball fill, the mask, then a crisp outline
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, px, px);
+    if (opt.fill) { ctx.fillStyle = opt.fill; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = opt.alpha ?? 1;
+    ctx.drawImage(b, 0, 0);
+    ctx.strokeStyle = opt.ink || "#000"; ctx.lineWidth = cfg.rim * boost * s;
+    const rimR = R - cfg.rim * boost * s / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rimR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (opt.rimProgress ?? 1));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- States ----------
+  const STATES = {
+    loop:      { label: "Loop",       note: "Your keyframes in sequence with the timing and easing on the right." },
+    startup:   { label: "Startup",    note: "Rings slide in from outside the ball and settle on the idle keyframe while the outline draws on." },
+    idle:      { label: "Idle",       note: "Rests on one keyframe with a slow drift, so the menu bar icon feels alive without being busy." },
+    listening: { label: "Listening",  note: "Moves through the loop faster the louder you speak. Use the voice slider to simulate." },
+    thinking:  { label: "Thinking",   note: "Cleaning up or generating: a steady loop at the thinking speed." },
+    pasted:    { label: "Pasted",     note: "One quick roll to the next keyframe on a snappy ease-out, then it settles." },
+    recording: { label: "Recording",  note: "Screen recording: the mark turns red and pulses gently." },
+  };
+  let state = "loop", playing = true, loopTime = 0, stateTime = 0, voice = 0.5, simVoice = true;
+  let pasteFrom = null, pasteTo = null, idleBase = null;
+
+  function framesForIdle() { return cfg.keys[Math.max(0, Math.min(4, cfg.states.idleFrame - 1))]; }
+  function drift(rings, t, amt) {
+    return rings.map((p, i) => [p[0] + amt * Math.sin(t * 0.9 + i * 2.1), p[1] + amt * Math.cos(t * 0.7 + i * 1.7)]);
+  }
+  let lastRings = DESIGN_KEYS[0];
+  function currentRings(dt) {
+    const st = cfg.states;
+    switch (state) {
+      case "loop": return ringsAtLoop(loopTime);
+      case "thinking": loopTime += dt * (st.thinkSpeed - 1); return ringsAtLoop(loopTime);
+      case "listening": {
+        if (simVoice) {   // syllable bursts with pauses between words
+          const t = stateTime;
+          voice = Math.max(0, Math.sin(t * 13)) * (Math.sin(t * 2.3) > -0.35 ? 1 : 0.05);
+        }
+        loopTime += dt * (st.listenBase + (st.listenMax - st.listenBase) * voice - 1);
+        return ringsAtLoop(loopTime);
+      }
+      case "idle": return { rings: drift(framesForIdle(), stateTime, st.idleDrift), atKey: false };
+      case "recording": return { rings: drift(framesForIdle(), stateTime, st.idleDrift * 0.6), atKey: false };
+      case "startup": {
+        const p = Math.min(1, stateTime / (st.startMs / 1000));
+        const e = easeOut(p);
+        const target = framesForIdle();
+        const rings = target.map(([x, y], i) => {
+          const ang = Math.atan2(y || -1, x || 0.001) + i * 0.4;
+          const far = 330;
+          return [x + (Math.cos(ang) * far - x) * (1 - e) * 1 + 0, y + (Math.sin(ang) * far - y) * (1 - e)];
+        });
+        return { rings, atKey: false, rimProgress: easeOut(Math.min(1, p * 1.25)) };
+      }
+      case "pasted": {
+        if (!pasteFrom) { const r = ringsAtLoop(loopTime); pasteFrom = r.rings; const { frames } = chain(); pasteTo = match(pasteFrom, frames[(r.key + 1) % frames.length]); }
+        const p = Math.min(1, stateTime / (st.pasteMs / 1000));
+        return { rings: lerp(pasteFrom, pasteTo, easeOut(p)), atKey: false };
+      }
+    }
+  }
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const big = $("big");
+  const speedFactor = () => cfg._previewSpeed ?? 1;
+  cfg._previewSpeed = cfg._previewSpeed ?? 1;
+
+  const sliders = {
+    hold: ["holdMs", (v) => `${v} ms`], move: ["moveMs", (v) => `${v} ms`],
+    stroke: ["stroke", (v) => v.toFixed(1)], rim: ["rim", (v) => v.toFixed(1)], fillet: ["fillet", (v) => v.toFixed(1)],
+    fullness: ["fullness", (v) => v.toFixed(2)], smallBoost: ["smallBoost", (v) => `×${v.toFixed(2)}`],
+  };
+  const stateSliders = {
+    idleFrame: ["idleFrame", (v) => `${v}`], idleDrift: ["idleDrift", (v) => `${v} px`],
+    listenBase: ["listenBase", (v) => `×${v.toFixed(2)}`], listenMax: ["listenMax", (v) => `×${v.toFixed(1)}`],
+    thinkSpeed: ["thinkSpeed", (v) => `×${v.toFixed(1)}`], pasteMs: ["pasteMs", (v) => `${v} ms`],
+    startMs: ["startMs", (v) => `${v} ms`], recPulse: ["recPulseMs", (v) => `${v} ms`],
+  };
+  function bindSliders() {
+    for (const [id, [key, fmt]] of Object.entries(sliders)) {
+      const el = $(id), out = $(id + "Out");
+      el.value = cfg[key]; out.textContent = fmt(+el.value);
+      el.oninput = () => { cfg[key] = +el.value; out.textContent = fmt(+el.value); changed(); };
+    }
+    for (const [id, [key, fmt]] of Object.entries(stateSliders)) {
+      const el = $(id), out = $(id + "Out");
+      el.value = cfg.states[key]; out.textContent = fmt(+el.value);
+      el.oninput = () => { cfg.states[key] = +el.value; out.textContent = fmt(+el.value); changed(); };
+    }
+    $("speed").value = cfg._previewSpeed; $("speedOut").textContent = `×${(+cfg._previewSpeed).toFixed(2)}`;
+    $("speed").oninput = (e) => { cfg._previewSpeed = +e.target.value; $("speedOut").textContent = `×${(+e.target.value).toFixed(2)}`; };
+    $("pingpong").checked = cfg.pingpong;
+    $("pingpong").onchange = (e) => { cfg.pingpong = e.target.checked; changed(); };
+    // easing
+    const sel = $("easePreset"), key = cfg.ease.join(",");
+    sel.value = [...sel.options].some((o) => o.value === key) ? key : "custom";
+    ["x1", "y1", "x2", "y2"].forEach((n, i) => {
+      const el = $(n); el.value = cfg.ease[i]; $(n + "Out").textContent = (+el.value).toFixed(2);
+      el.oninput = () => { cfg.ease[i] = +el.value; $(n + "Out").textContent = (+el.value).toFixed(2); ease = bezier(...cfg.ease); drawCurve(); changed(); };
+    });
+    $("customEase").hidden = sel.value !== "custom";
+    sel.onchange = () => {
+      if (sel.value !== "custom") { cfg.ease = sel.value.split(",").map(Number); ["x1","y1","x2","y2"].forEach((n, i) => { $(n).value = cfg.ease[i]; $(n + "Out").textContent = cfg.ease[i].toFixed(2); }); }
+      $("customEase").hidden = sel.value !== "custom";
+      ease = bezier(...cfg.ease); drawCurve(); changed();
+    };
+    drawCurve();
+  }
+
+  function drawCurve() {
+    const c = $("curve"), dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth || 340, h = c.clientHeight || 96;
+    c.width = w * dpr; c.height = h * dpr;
+    const g = c.getContext("2d"); g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement);
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = css.getPropertyValue("--line"); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(8, h - 8); g.lineTo(w - 8, 8); g.stroke();
+    g.strokeStyle = css.getPropertyValue("--accent"); g.lineWidth = 2; g.beginPath();
+    for (let i = 0; i <= 60; i++) { const x = i / 60, y = ease(x); const px = 8 + x * (w - 16), py = h - 8 - y * (h - 16); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.stroke();
+  }
+
+  function buildStates() {
+    const wrap = $("states"); wrap.innerHTML = "";
+    for (const [k, v] of Object.entries(STATES)) {
+      const b = document.createElement("button"); b.textContent = v.label; b.setAttribute("aria-pressed", k === state);
+      b.onclick = () => setState(k); wrap.appendChild(b);
+    }
+    $("stateNote").querySelector(".note").textContent = STATES[state].note;
+    const act = $("stateActions"); act.innerHTML = "";
+    if (["startup", "pasted"].includes(state)) {
+      const r = document.createElement("button"); r.textContent = "Replay"; r.onclick = () => { stateTime = 0; pasteFrom = null; }; act.appendChild(r);
+    }
+    if (state === "listening") {
+      act.innerHTML = `<label class="chk" style="width:100%"><input type="checkbox" id="sim" ${simVoice ? "checked" : ""}> Simulate speech</label>
+        <div class="ctl" style="width:100%"><label for="voice">Voice level</label><output id="voiceOut">${Math.round(voice * 100)}%</output><input type="range" id="voice" min="0" max="1" step="0.01" value="${voice}"></div>`;
+      $("sim").onchange = (e) => { simVoice = e.target.checked; };
+      $("voice").oninput = (e) => { simVoice = false; $("sim").checked = false; voice = +e.target.value; $("voiceOut").textContent = Math.round(voice * 100) + "%"; };
+    }
+    $("badge").textContent = STATES[state].label;
+  }
+  function setState(k) { state = k; stateTime = 0; pasteFrom = null; playing = true; $("play").textContent = "❚❚"; buildStates(); }
+
+  function buildKeys() {
+    const wrap = $("keys"); wrap.innerHTML = "";
+    cfg.keys.forEach((k, i) => {
+      const b = document.createElement("button");
+      b.className = cfg.enabled[i] ? "" : "off";
+      b.title = cfg.enabled[i] ? `Keyframe ${i + 1}: in the loop (click to skip)` : `Keyframe ${i + 1}: skipped (click to include)`;
+      const c = document.createElement("canvas");
+      const l = document.createElement("span"); l.className = "k-label"; l.textContent = `${i + 1}`;
+      b.append(c, l);
+      b.onclick = () => { if (cfg.enabled.filter(Boolean).length > 1 || !cfg.enabled[i]) { cfg.enabled[i] = !cfg.enabled[i]; buildKeys(); changed(); } };
+      wrap.appendChild(b);
+      requestAnimationFrame(() => drawMark(c, 56, k, { ink: getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() }));
+    });
+  }
+
+  // ---------- Transport ----------
+  $("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "❚❚" : "▶︎"; };
+  function jumpKey(dir) {
+    if (state !== "loop") setState("loop");
+    playing = false; $("play").textContent = "▶︎";
+    const seg = (cfg.holdMs + cfg.moveMs) / 1000, L = loopLength();
+    const cur = Math.floor((((loopTime % L) + L) % L) / seg + 1e-6);
+    const n = (cur + dir + (sequence().length - 1)) % (sequence().length - 1);
+    loopTime = n * seg + Math.min(0.01, cfg.holdMs / 2000);
+  }
+  $("prev").onclick = () => jumpKey(-1);
+  $("next").onclick = () => jumpKey(1);
+  $("scrub").oninput = (e) => { if (state !== "loop") setState("loop"); playing = false; $("play").textContent = "▶︎"; loopTime = (+e.target.value / 1000) * loopLength(); };
+
+  // ---------- Drag rings on a paused keyframe ----------
+  let dragging = -1, handles = [];
+  function bigToBall(ev) {
+    const r = big.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+    return [(x - 0.5) * 300 / 0.86, (y - 0.5) * 300 / 0.86];
+  }
+  function editableKey() {
+    if (state !== "loop" || playing) return -1;
+    const r = ringsAtLoop(loopTime);
+    if (!r.atKey) return -1;
+    return chain().seq[r.key];
+  }
+  big.addEventListener("pointerdown", (ev) => {
+    const k = editableKey(); if (k < 0) return;
+    const [x, y] = bigToBall(ev);
+    const rings = ringsAtLoop(loopTime).rings;
+    let best = -1, bd = 26;
+    rings.forEach((p, i) => { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { dragging = best; big.setPointerCapture(ev.pointerId); }
+  });
+  big.addEventListener("pointermove", (ev) => {
+    if (dragging < 0) return;
+    const k = editableKey(); if (k < 0) return;
+    const [x, y] = bigToBall(ev);
+    const shown = ringsAtLoop(loopTime).rings[dragging];
+    const raw = cfg.keys[k];
+    // find which raw ring is displayed at this slot (chain reorders rings)
+    let ri = 0, bd = Infinity; raw.forEach((p, i) => { const d = Math.hypot(p[0] - shown[0], p[1] - shown[1]); if (d < bd) { bd = d; ri = i; } });
+    cfg.keys[k][ri] = [Math.round(Math.max(-300, Math.min(300, x))), Math.round(Math.max(-300, Math.min(300, y)))];
+    changed(); buildKeysDebounced();
+  });
+  big.addEventListener("pointerup", () => { dragging = -1; });
+  let kd; function buildKeysDebounced() { clearTimeout(kd); kd = setTimeout(buildKeys, 120); }
+
+  // ---------- Persistence ----------
+  function exportCfg() { const c = clone(cfg); delete c._previewSpeed; return c; }
+  let saveT;
+  function changed() {
+    $("json").value = JSON.stringify(exportCfg(), null, 1);
+    clearTimeout(saveT);
+    saveT = setTimeout(() => { try { localStorage.setItem("yap-mark-lab", JSON.stringify(cfg)); } catch (_) {} }, 300);
+    if (savedJSON && savedJSON !== JSON.stringify(exportCfg())) $("status").textContent = "Unsaved changes";
+  }
+  let db = null, savedJSON = null;
+  (async () => {
+    try { db = await (window.claude?.use?.("db") ?? null); } catch (_) { db = null; }
+    if (!db) { $("save").textContent = "Save (copy instead)"; $("status").textContent = "Saving to Claude isn't available here: use Copy settings"; return; }
+    try {
+      const snap = await db.doc("tuning/current").get();
+      if (snap.exists && snap.data()?.config) {
+        const saved = snap.data().config;
+        cfg = Object.assign(clone(DEFAULTS), saved, { _previewSpeed: cfg._previewSpeed });
+        ease = bezier(...cfg.ease);
+        savedJSON = JSON.stringify(exportCfg());
+        bindSliders(); buildKeys(); changed();
+        $("status").textContent = "Loaded your saved settings";
+      }
+    } catch (_) {}
+  })();
+  $("save").onclick = async () => {
+    if (!db) { copy(); return; }
+    $("status").textContent = "Saving…";
+    try {
+      await db.doc("tuning/current").set({ config: exportCfg(), savedAt: new Date().toISOString() });
+      savedJSON = JSON.stringify(exportCfg());
+      $("status").textContent = "Saved · Claude can read this now";
+    } catch (e) {
+      $("status").textContent = e?.code === "invalid_argument" ? "You can view but not save this page: use Copy settings" : "Couldn't save. Try again, or use Copy settings";
+    }
+  };
+  function copy() {
+    const text = JSON.stringify(exportCfg());
+    navigator.clipboard?.writeText(text).then(() => { $("status").textContent = "Copied: paste it to Claude"; },
+      () => { const t = $("json"); t.closest("details").open = true; t.focus(); t.select(); $("status").textContent = "Select-all is ready: copy it with ⌘C"; });
+  }
+  $("copy").onclick = copy;
+  $("applyJson").onclick = () => {
+    try { const v = JSON.parse($("json").value); cfg = Object.assign(clone(DEFAULTS), v, { _previewSpeed: cfg._previewSpeed }); ease = bezier(...cfg.ease); bindSliders(); buildKeys(); changed(); $("status").textContent = "Applied"; }
+    catch (_) { $("status").textContent = "That isn't valid settings JSON"; }
+  };
+  $("reset").onclick = () => { const sp = cfg._previewSpeed; cfg = clone(DEFAULTS); cfg._previewSpeed = sp; ease = bezier(...cfg.ease); bindSliders(); buildKeys(); changed(); $("status").textContent = "Reset to your design"; };
+
+  // ---------- Pill bars ----------
+  const bars = $("pillBars"); for (let i = 0; i < 9; i++) { const el = document.createElement("i"); bars.appendChild(el); }
+
+  // ---------- Frame loop ----------
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000) * speedFactor(); last = now;
+    if (playing && !reduce) { loopTime += dt; stateTime += dt; }
+    const css = getComputedStyle(document.documentElement);
+    const ink = css.getPropertyValue("--ink").trim();
+    const r = currentRings(playing ? dt : 0);
+    lastRings = r.rings;
+    const st = cfg.states;
+    let opt = { ink, rimProgress: r.rimProgress };
+    if (state === "recording") {
+      const ph = (stateTime * 1000 / st.recPulseMs) * Math.PI * 2;
+      opt.ink = "#e5383b"; opt.alpha = 0.78 + 0.22 * (0.5 + 0.5 * Math.cos(ph)); opt.scale = 1 + 0.015 * (0.5 + 0.5 * Math.cos(ph));
+    }
+    drawMark(big, big.clientWidth || 360, r.rings, { ...opt, scale: 0.86 * (opt.scale ?? 1) });
+    drawMark($("mbLight"), 18, r.rings, { ...opt, ink: state === "recording" ? opt.ink : "#111111", fill: null });
+    drawMark($("mbDark"), 18, r.rings, { ...opt, ink: state === "recording" ? opt.ink : "#f2f2f2" });
+    drawMark($("pillMark"), 20, r.rings, { ...opt, ink: state === "recording" ? opt.ink : "#ffffff" });
+    drawMark($("dock"), 48, r.rings, { ...opt });
+    // pill waveform reacts in listening
+    const lvl = state === "listening" ? voice : state === "thinking" ? 0.15 : 0.05;
+    [...bars.children].forEach((el, i) => { const d = Math.abs(i - 4) / 4; el.style.height = `${Math.max(3, 18 * lvl * (1 - d * 0.6) * (0.7 + 0.3 * Math.sin(now / 90 + i)))}px`; });
+    // transport readout
+    if (state === "loop") {
+      const L = loopLength(), u = ((loopTime % L) + L) % L;
+      $("scrub").value = Math.round(u / L * 1000);
+      $("time").textContent = `${u.toFixed(2)} / ${L.toFixed(2)} s`;
+    } else { $("time").textContent = `${stateTime.toFixed(2)} s`; }
+    const ek = editableKey();
+    $("hint").textContent = ek >= 0 ? `Editing keyframe ${ek + 1}: drag a ring centre (dots) to move it.` : (state === "loop" ? "Pause on a keyframe to drag its rings." : STATES[state].note);
+    // keyframe highlight
+    const cur = state === "loop" ? chain().seq[ringsAtLoop(loopTime).key] : -1;
+    [...$("keys").children].forEach((b, i) => b.classList.toggle("current", i === cur));
+    // handles
+    if (ek >= 0) {
+      const g = big.getContext("2d"), px = big.width, s = px / 300 * 0.86;
+      g.fillStyle = css.getPropertyValue("--accent").trim();
+      r.rings.forEach(([x, y]) => { g.beginPath(); g.arc(px / 2 + x * s, px / 2 + y * s, Math.max(4, px / 80), 0, Math.PI * 2); g.fill(); });
+    }
+    requestAnimationFrame(frame);
+  }
+
+  bindSliders(); buildStates(); buildKeys(); changed();
+  window.addEventListener("resize", drawCurve);
+  requestAnimationFrame(frame);
+})();
+</script>
