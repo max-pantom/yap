@@ -24,8 +24,10 @@ Sources/Yap/
   Library/     recordings + dictation history window
   UI/          Flow bar, overlays, settings, shortcuts, models
   Support/     preferences, permissions, devices, shortcuts, logging
-scripts/       icon renderer (icon-final.swift) and set-icon.sh
-design/icons/  final icon renders (clay, mint, graphite)
+scripts/       mark GIF/video renderers, icon renderers, set-icon.sh
+design/mark/   the mark: source frames from Paper, tuned config (mark-config.json), Mark Lab (lab.html)
+design/icon-glass/  app icon: Paper designs, Icon Composer layers, Liquid Glass renders
+docs/          README images (icons, mark GIFs, Flow bar states)
 ```
 
 ## Debug tools
@@ -50,6 +52,7 @@ Design tools in `scripts/`:
 | Script | What it does |
 |---|---|
 | `mark-video.swift` | Renders the mark morph to MP4 (`swift scripts/mark-video.swift out.mp4 [speed] [loops] [size]`) |
+| `mark-gif.swift` | Renders the mark loop to a GIF from `mark-config.json` (`swift scripts/mark-gif.swift out.gif 111111 ffffff`) |
 | `render-glass-icon.sh` | Renders `Resources/AppIcon.icon` with Icon Composer's Liquid Glass renderer and installs it as the static icon |
 | `icon-from-paper.swift` | Renders the flat icon variants from `design/icon-glass/paper` |
 | `set-icon.sh` | Turns a 1024 PNG into `Resources/AppIcon.icns` |

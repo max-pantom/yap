@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/icon.png" width="160" alt="Yap icon: sound bars tipping over into words">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/icon-dark.png">
+    <img src="docs/icon-default.png" width="168" alt="Yap icon: a glass ball with liquid seams">
+  </picture>
 </p>
 
 <h1 align="center">Yap</h1>
@@ -46,6 +49,13 @@ A small pill that lives at the bottom of your screen. It shows a live waveform a
 controls in hands-free mode. Click it to dictate, drag it anywhere. It never steals focus and respects Reduce Motion.
 
 ### The mark
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/mark-dark.gif">
+    <img src="docs/mark-light.gif" width="200" alt="The Yap mark morphing through its five keyframes">
+  </picture>
+</p>
+
 Yap's logo is a ball with three rings sliding inside it. It's drawn live, not from images, and moves with what Yap is
 doing: it rolls in at startup, rests in the menu bar, flows faster the louder you talk, loops while generating, does
 one quick roll when your text lands, and pulses red while recording. Timing and shape come from a tuning tool

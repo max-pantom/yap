@@ -305,7 +305,8 @@ final class MarkMotion: NSObject, ObservableObject {
 
 /// Draws the mark exactly like Yap Mark Lab: rings → blur → threshold (liquid joins) → clip to the ball → crisp outline.
 enum MarkRenderer {
-    private static let ci = CIContext(options: [.cacheIntermediates: false])
+    // No colour management in the mask step, so the ink comes out exactly as given (no grey shift on dark inks).
+    private static let ci = CIContext(options: [.cacheIntermediates: false, .workingColorSpace: NSNull(), .outputColorSpace: NSNull()])
     private static let gray = CGColorSpaceCreateDeviceGray()
     private static let rgb = CGColorSpace(name: CGColorSpace.sRGB)!
 

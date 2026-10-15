@@ -11,14 +11,22 @@ let speed = a.count > 2 ? Double(a[2])! : 1
 let loops = a.count > 3 ? Int(a[3])! : 2
 let side = a.count > 4 ? Int(a[4])! : 720
 
-// Keyframes: three moving ring centres per frame, relative to the ball centre (ball radius 150, SVG y-down).
-// Ring identity is matched across frames for minimum travel; the last entry is frame 1 relabelled to close the loop.
-let keys: [[CGPoint]] = [
-    [(-56, 0), (-50, -86), (46, -66)], [(-58, 0), (-50, -86), (-204, -48)], [(-58, 0), (-138, -20), (-202, -48)],
-    [(24, -28), (60, -140), (-72, -82)], [(164, -8), (-38, -150), (-160, 0)], [(46, -66), (-50, -86), (-56, 0)],
-].map { $0.map { CGPoint(x: $0.0, y: $0.1) } }
+// Keyframes and timing from design/mark/mark-config.json (the Mark Lab settings).
+struct Config: Decodable { let holdMs: Double; let moveMs: Double; let stroke: CGFloat; let rim: CGFloat
+                           let fillet: CGFloat; let fullness: CGFloat; let keys: [[[CGFloat]]] }
+let cfg = try JSONDecoder().decode(Config.self, from: Data(contentsOf: URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent().appendingPathComponent("../design/mark/mark-config.json")))
+func match(_ p: [CGPoint], _ q: [CGPoint]) -> [CGPoint] {
+    let perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+    return perms.map { $0.map { q[$0] } }.min { x, y in
+        zip(p, x).reduce(0) { $0 + hypot($1.0.x - $1.1.x, $1.0.y - $1.1.y) } < zip(p, y).reduce(0) { $0 + hypot($1.0.x - $1.1.x, $1.0.y - $1.1.y) }
+    }!
+}
+let raw = cfg.keys.map { $0.map { CGPoint(x: $0[0], y: $0[1]) } }
+var keys = [raw[0]]
+for k in raw.dropFirst() + [raw[0]] { keys.append(match(keys.last!, k)) }
 
-let hold = 0.35 / speed, move = 0.65 / speed           // seconds per keyframe: rest, then travel
+let hold = cfg.holdMs / 1000 / speed, move = cfg.moveMs / 1000 / speed
 let segment = hold + move
 let fps = 60.0
 let total = segment * Double(keys.count - 1) * Double(loops)
@@ -54,7 +62,7 @@ let origin = (CGFloat(side) - ball) / 2
 let s = ball / 300
 let cs = CGColorSpace(name: CGColorSpace.sRGB)!
 let ci = CIContext(options: [.workingColorSpace: cs])
-let k: CGFloat = 40, thr: CGFloat = 0.62, stroke: CGFloat = 7.6, fillet: CGFloat = 7
+let k: CGFloat = 40, thr: CGFloat = cfg.fullness, stroke: CGFloat = cfg.stroke, fillet: CGFloat = cfg.fillet
 
 func frame(_ centres: [CGPoint]) -> CGImage {
     let ctx = CGContext(data: nil, width: W, height: W, bitsPerComponent: 8, bytesPerRow: 0, space: cs,
@@ -81,8 +89,8 @@ func frame(_ centres: [CGPoint]) -> CGImage {
     out.addEllipse(in: CGRect(x: origin, y: origin, width: ball, height: ball)); out.clip()
     out.draw(liquid, in: CGRect(x: 0, y: 0, width: W, height: W))
     out.restoreGState()
-    out.setStrokeColor(.black); out.setLineWidth(9 * s)
-    out.strokeEllipse(in: CGRect(x: origin + 4.5 * s, y: origin + 4.5 * s, width: ball - 9 * s, height: ball - 9 * s))
+    out.setStrokeColor(.black); out.setLineWidth(cfg.rim * s)
+    out.strokeEllipse(in: CGRect(x: origin + cfg.rim * s / 2, y: origin + cfg.rim * s / 2, width: ball - cfg.rim * s, height: ball - cfg.rim * s))
     return out.makeImage()!
 }
 
