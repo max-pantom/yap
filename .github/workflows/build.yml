@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version && xcrun --show-sdk-version
+      - name: Build app bundle
+        run: ./build.sh
+      - name: Upload Yap.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yap.app
+          path: build/Yap.app

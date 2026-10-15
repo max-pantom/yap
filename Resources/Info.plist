@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Yap</string>
+    <key>CFBundleDisplayName</key><string>Yap</string>
+    <key>CFBundleIdentifier</key><string>app.yap.mac</string>
+    <key>CFBundleExecutable</key><string>Yap</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key><string>26.0</string>
+    <key>LSUIElement</key><true/>
+    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSCameraUseContinuityCameraDeviceType</key><true/>
+    <key>NSMicrophoneUsageDescription</key><string>Yap listens to your voice while you hold the dictation key, and records your narration in screen recordings. Audio never leaves your Mac.</string>
+    <key>NSCameraUsageDescription</key><string>Yap shows your camera in a floating bubble during screen recordings.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Yap transcribes your speech on-device.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>Yap can include your Mac's system audio in screen recordings.</string>
+</dict>
+</plist>
