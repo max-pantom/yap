@@ -142,12 +142,9 @@ actor Polisher {
     }
 
     private func generate(session: LanguageModelSession, prompt: String, timeout: TimeInterval) async -> String? {
-        // macOS 27 SDK renamed the parameter; keep building with Xcode 26's macOS 26 SDK too.
-        #if compiler(>=6.3)
-        let options = GenerationOptions(samplingMode: .greedy)
-        #else
+        // Yap targets the macOS 26 SDK, where the label is still `sampling`.
+        // The Swift compiler version does not reliably identify the linked SDK.
         let options = GenerationOptions(sampling: .greedy)
-        #endif
         return await withTaskGroup(of: String?.self) { group in
             group.addTask {
                 let r = try? await session.respond(to: prompt, options: options)

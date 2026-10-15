@@ -281,11 +281,7 @@ final class MarkMotion: NSObject, ObservableObject {
     }
 
     static func match(_ a: [CGPoint], _ b: [CGPoint]) -> [CGPoint] {
-        let perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
-        return perms.map { p in p.map { b[$0] } }.min { x, y in
-            zip(a, x).reduce(0) { $0 + hypot($1.0.x - $1.1.x, $1.0.y - $1.1.y) } <
-            zip(a, y).reduce(0) { $0 + hypot($1.0.x - $1.1.x, $1.0.y - $1.1.y) }
-        }!
+        bestPermutation(from: a, to: b).map { b[$0] }
     }
 
     static func ease(_ x: Double) -> Double { bezier(MarkConfig.ease, x) }

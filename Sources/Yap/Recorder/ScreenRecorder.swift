@@ -39,9 +39,12 @@ final class ScreenRecorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegat
         recCfg.outputURL = url
         recCfg.outputFileType = .mp4
         recCfg.videoCodecType = options.hevc ? .hevc : .h264
-        #if compiler(>=6.3)   // property only exists in the macOS 27 SDK (Xcode 26 builds skip it)
-        if #available(macOS 27.0, *) { recCfg.mixesAudioWithMicrophone = true }
-        #endif
+        // This setter was added after the macOS 26 SDK. Use it dynamically when
+        // running on a newer system without making Xcode 26 builds reference it.
+        let mixSelector = NSSelectorFromString("setMixesAudioWithMicrophone:")
+        if recCfg.responds(to: mixSelector) {
+            recCfg.setValue(true, forKey: "mixesAudioWithMicrophone")
+        }
 
         let stream = SCStream(filter: filter, configuration: cfg, delegate: self)
         let output = SCRecordingOutput(configuration: recCfg, delegate: self)
