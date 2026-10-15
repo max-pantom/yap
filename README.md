@@ -75,7 +75,27 @@ If the second model is slow or offline, Apple Intelligence finishes the job auto
 - Apple Intelligence enabled for AI cleanup and Command Mode (without it, Yap falls back to rule-based cleanup)
 - A microphone (built-in, USB, Bluetooth or an iPhone via Continuity Camera)
 
-## Install (build from source)
+## Install
+
+1. Download **Yap for macOS** from the [latest release](https://github.com/max-pantom/yap/releases/latest).
+2. Open the downloaded ZIP and drag **Yap.app** into your **Applications** folder.
+3. The first time you launch it, Control-click **Yap.app**, choose **Open**, then choose **Open** again.
+
+Yap is currently free and open source but not Apple-notarized, so opening it normally may show “Apple could not
+verify Yap is free of malware.” The Control-click method is macOS's built-in way to approve an app you trust. If
+macOS still blocks it, open **System Settings → Privacy & Security**, scroll to the security message about Yap, and
+click **Open Anyway**.
+
+As a last resort, you can clear the downloaded-file quarantine flag yourself:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Yap.app
+open /Applications/Yap.app
+```
+
+Only use that command for the copy downloaded from this repository.
+
+### Build from source
 
 Xcode is **not** required; the Command Line Tools are enough (`xcode-select --install`).
 
