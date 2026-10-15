@@ -4,18 +4,41 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach (for example, v1.0)
+        required: false
+        type: string
 
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
       - name: Toolchain
         run: swift --version && xcrun --show-sdk-version
       - name: Build app bundle
         run: ./build.sh
+      - name: Package release build
+        if: env.RELEASE_TAG != ''
+        run: ditto -c -k --sequesterRsrc --keepParent build/Yap.app "Yap-${RELEASE_TAG}-macOS-arm64.zip"
       - name: Upload Yap.app
         uses: actions/upload-artifact@v4
         with:
           name: Yap.app
           path: build/Yap.app
+      - name: Attach build to GitHub Release
+        if: env.RELEASE_TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: Yap-${{ env.RELEASE_TAG }}-macOS-arm64.zip
