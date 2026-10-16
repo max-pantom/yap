@@ -35,13 +35,18 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - **Any key you like.** Record your own shortcut: Fn, Right Alt, Right Ctrl, F13, ⌃Space… Windows and 60% keyboards are detected, with sensible suggestions.
 - **AI cleanup:** removes "um"s and false starts, applies self-corrections ("at 3, no wait, 4" → "at 4"), formats lists, and adapts to the app you're typing in.
 - **Command Mode:** select text, hold your Command Mode key, and say "make this friendlier". With nothing selected it writes new text.
+- **Learns from your corrections.** Fix a word right after it's pasted ("Jon" → "John") and Yap adds it to your dictionary.
+- **Voice commands:** "scratch that" drops the sentence before it, or on its own removes your last dictation. End with "send it" or "press enter" to send the message.
 - **Dictionary and snippets:** teach spellings (`chat gpt => ChatGPT`) and voice shortcuts (`my calendar link => https://…`).
+- **Your iPhone as a wireless mic.** With the Yap Mic companion app, hold the button on your phone and talk from across the room. The connection is encrypted with a key only your phone and Mac share, and it stays on your Wi-Fi.
 - Pastes at your cursor **and** leaves the text on your clipboard, so it's never lost. Searchable history and a words-dictated counter.
 
 ### Record your screen
 - **⌥⇧R** records the display under your pointer, or pick a window or app with the system picker.
 - Draggable **camera bubble** (iPhone via Continuity Camera, USB webcams, capture cards), mic and optional system audio, click highlights, 3-2-1 countdown.
 - **No time limit.** When you stop, the video is copied to your clipboard; paste it straight into Slack, Mail or an issue.
+- **Auto-zoom:** the video smoothly zooms in where you click, follows your pointer, then eases back out. The original is kept; one click removes the zoom.
+- **Blur:** draw boxes over emails, API keys or names to blur or pixelate them, for the whole video or part of it.
 - On-device **transcript, captions, AI title, summary and chapters** for every recording. Built-in trim.
 
 ### The Flow bar
@@ -60,6 +65,12 @@ Yap's logo is a ball with three rings sliding inside it. It's drawn live, not fr
 doing: it rolls in at startup, rests in the menu bar, flows faster the louder you talk, loops while generating, does
 one quick roll when your text lands, and pulses red while recording. Timing and shape come from a tuning tool
 (`design/mark/lab.html`) and live in `design/mark/mark-config.json`.
+
+### Shortcuts and automation
+`yap://` links let Shortcuts ("Open URLs"), Raycast, Alfred, Stream Deck or a script control Yap: `yap://dictate`,
+`yap://command`, `yap://record`, `yap://record-window`, `yap://camera`, `yap://copy-last`, `yap://library`,
+`yap://settings`. Add `?action=start|stop|cancel` to the dictation links, or `?action=start|stop|discard` to
+the recording ones. The full list is in Settings → General, where you can also turn the links off.
 
 ### Models (Settings → Models)
 | Job | Default | Optional |
@@ -111,6 +122,20 @@ Liquid Glass app icon (`Resources/AppIcon.icon`, made in Icon Composer) so it ad
 modes; with only the Command Line Tools it uses a static render of the same icon. The app is ad-hoc signed; the build pins its code
 requirement to the bundle identifier, so macOS privacy permissions survive rebuilds.
 
+Releases built with an update key check for new versions themselves (Yap → Check for Updates…).
+
+### iPhone companion (Yap Mic)
+
+Needs Xcode (free) to put it on your phone:
+
+```bash
+brew install xcodegen
+cd Companion && xcodegen && open YapMic.xcodeproj
+```
+
+Pick your team under Signing & Capabilities, choose your iPhone, and press Run. Then, in Yap on your Mac, go to
+Settings → Dictation → Pair iPhone and scan the code with Yap Mic.
+
 ### Permissions
 On first launch Yap walks you through these (Settings → Permissions shows their status any time):
 
@@ -121,6 +146,7 @@ On first launch Yap walks you through these (Settings → Permissions shows thei
 | Accessibility | Paste at your cursor and read selected text for Command Mode |
 | Screen & System Audio Recording | Record your screen, only while you're recording |
 | Camera (optional) | The camera bubble |
+| Local Network (optional) | Only after you pair an iPhone, to find it on your Wi-Fi |
 
 ## Privacy
 

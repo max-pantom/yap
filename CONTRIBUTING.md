@@ -20,14 +20,16 @@ Sources/Yap/
   App/         app entry, menu bar, windows, global hot keys, self-tests
   Dictation/   hotkey monitor, mic capture, speech engine, AI cleanup (Polisher), paste/selection (TextBridge)
   Models/      Whisper (WhisperKit) and second-model providers (Ollama, OpenAI-compatible), Keychain
-  Recorder/    ScreenCaptureKit recording, camera bubble, post-processing (transcript, captions, AI notes)
+  Recorder/    ScreenCaptureKit recording, camera bubble, auto-zoom and blur (VideoEffects), post-processing
+  Remote/      iPhone microphone link: protocol shared with the companion app (MicLink), Mac listener
   Library/     recordings + dictation history window
   UI/          Flow bar, overlays, settings, shortcuts, models
   Support/     preferences, permissions, devices, shortcuts, logging
 scripts/       mark GIF/video renderers, icon renderers, set-icon.sh
 design/mark/   the mark: source frames from Paper, tuned config (mark-config.json), Mark Lab (lab.html)
 design/icon-glass/  app icon: Paper designs, Icon Composer layers, Liquid Glass renders
-docs/          README images (icons, mark GIFs, Flow bar states)
+docs/          README images (icons, mark GIFs, Flow bar states), RELEASING.md (signing, notarization, updates)
+Companion/     Yap Mic, the iPhone app (XcodeGen spec: `cd Companion && xcodegen`)
 ```
 
 ## Debug tools

@@ -23,6 +23,11 @@ final class DictationController: ObservableObject {
     private var selectionTask: Task<String?, Never>?
     private var startedAt = Date()
     private let history: HistoryStore
+    /// Set while the iPhone is the microphone.
+    private var remoteFeed: RemoteFeed?
+    var isRemote: Bool { remoteFeed != nil }
+    /// What was pasted last (shown on the iPhone).
+    private(set) var lastOutput: String?
     /// The last paste, so "scratch that" can take it back.
     private var lastDelivery: (app: pid_t, at: Date)?
 
@@ -36,6 +41,7 @@ final class DictationController: ObservableObject {
     }
 
     func boot() {
+        RemoteMic.shared.boot(self)
         hotkeys.start()
         FlowBar.shared.attach(self)
         Log.write("boot: mic=\(Permission.microphone.isGranted) ax=\(Permission.accessibility.isGranted) input=\(Permission.inputMonitoring.isGranted) tap=\(hotkeys.isRunning) inputs=\(Devices.shared.microphones.map(\.name)) dictate=\(Shortcut.label(.dictate))")
@@ -136,6 +142,43 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// The iPhone started talking. Returns false if Yap is busy or not ready.
+    @discardableResult
+    func beginRemote(command: Bool) -> Bool {
+        guard phase == .idle else { return false }
+        guard SpeechEngine.shared.isReady, let format = SpeechEngine.shared.analyzerFormat else {
+            show(engineStatus, symbol: "hourglass", error: false)
+            return false
+        }
+        targetApp = NSWorkspace.shared.frontmostApplication
+        isCommand = command
+        liveText = ""
+        startedAt = Date()
+        do {
+            let session = try SpeechEngine.shared.startLive { [weak self] text in
+                Task { @MainActor in self?.liveText = text }
+            }
+            guard let feed = RemoteFeed(target: format, onBuffer: { [weak self] buffer, level in
+                session.feed(buffer)
+                self?.push(level: level)
+            }) else { session.cancel(); return false }
+            self.session = session
+            remoteFeed = feed
+        } catch {
+            fail(error.localizedDescription, symbol: "iphone.slash")
+            return false
+        }
+        phase = .locked
+        selectionTask = command ? Task { await TextBridge.selectedText() } : nil
+        Log.write("listening via iPhone (command=\(command)) app=\(targetApp?.localizedName ?? "?")")
+        Sounds.start()
+        FlowBar.shared.update()
+        if !command { let app = targetApp?.localizedName; Task { await Polisher.shared.prewarmCleanup(app: app) } }
+        return true
+    }
+
+    func feedRemote(_ pcm: Data) { remoteFeed?.feed(pcm) }
+
     func cancel() {
         guard phase != .idle else { return }
         mic.stop()
@@ -155,8 +198,8 @@ final class DictationController: ObservableObject {
 
         var raw: String
         do { raw = try await session.finish() } catch { fail(error.localizedDescription); return }
-        if mic.collectWhisperAudio {
-            let samples = mic.takeCollectedSamples()
+        if WhisperEngine.shared.isActive, mic.collectWhisperAudio || remoteFeed != nil {
+            let samples = remoteFeed?.samples ?? mic.takeCollectedSamples()
             if samples.count > 8_000 { // > 0.5 s
                 do {
                     let w = try await WhisperEngine.shared.transcribe(samples: samples)
@@ -205,6 +248,7 @@ final class DictationController: ObservableObject {
             try? await Task.sleep(for: .milliseconds(120))
         }
         let result = TextBridge.deliver(output)
+        lastOutput = output
         if result != .copiedOnly {
             if let app = targetApp { lastDelivery = (app.processIdentifier, Date()) }
             if commands.pressReturn {
@@ -247,6 +291,7 @@ final class DictationController: ObservableObject {
     private func push(level: Float) { FlowBar.shared.meter.level = level }
 
     private func reset() {
+        remoteFeed = nil
         phase = .idle
         isCommand = false
         FlowBar.shared.meter.level = 0

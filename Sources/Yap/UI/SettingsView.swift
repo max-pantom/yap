@@ -144,9 +144,56 @@ private struct DictationTab: View {
             }
             .onChange(of: locale) { _, _ in model.dictation.boot() }
             LabeledContent("Speech model", value: model.dictation.engineStatus)
+            IPhoneMicSection(remote: RemoteMic.shared)
         }
         .formStyle(.grouped)
         .task { locales = await SpeechEngine.supportedLocales().map(\.identifier).sorted() }
+    }
+}
+
+private struct IPhoneMicSection: View {
+    @ObservedObject var remote: RemoteMic
+    @Local private var showingCode = false
+    @Local private var confirmUnpair = false
+
+    var body: some View {
+        Section {
+            if let p = remote.pairing {
+                LabeledContent("Status") {
+                    switch remote.state {
+                    case .connected(let name): Label("\(name) connected", systemImage: "iphone.radiowaves.left.and.right").foregroundStyle(.green)
+                    case .waiting: Text("Waiting for your iPhone").foregroundStyle(.secondary)
+                    case .failed(let e): Text(e).foregroundStyle(.orange)
+                    case .off: Text("Off").foregroundStyle(.secondary)
+                    }
+                }
+                if showingCode, let img = RemoteMic.qrImage(for: p) {
+                    HStack(alignment: .top, spacing: 16) {
+                        Image(nsImage: img).interpolation(.none).padding(8).background(.white, in: RoundedRectangle(cornerRadius: 8))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Scan with Yap Mic").font(.headline)
+                            Text("Open Yap Mic on your iPhone, tap Pair, and point it at this code. Keep it private: it's the key to this Mac's microphone link.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button("Done") { showingCode = false }
+                        }
+                    }
+                } else {
+                    HStack {
+                        Button("Show Pairing Code") { showingCode = true }
+                        Button("Unpair", role: .destructive) { confirmUnpair = true }
+                            .confirmationDialog("Unpair your iPhone?", isPresented: $confirmUnpair) {
+                                Button("Unpair", role: .destructive) { remote.unpair() }
+                            } message: { Text("Yap stops listening on your network. You can pair again any time.") }
+                    }
+                }
+            } else {
+                Button("Pair iPhone…") { _ = remote.pair(); showingCode = true }
+            }
+        } header: {
+            Text("iPhone as microphone")
+        } footer: {
+            Text("With the Yap Mic app, hold the button on your phone and talk from anywhere in the room; the text pastes at your cursor here. Audio is encrypted with a key only your phone and this Mac have, and stays on your Wi-Fi. Build the app from Companion/ in the Yap repository.")
+        }
     }
 }
 

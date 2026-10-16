@@ -90,3 +90,40 @@ final class MicCapture {
         return max(0, min(1, (db + 55) / 45))
     }
 }
+
+/// Audio arriving from the iPhone (16 kHz mono Int16), converted to the analyzer's format.
+final class RemoteFeed {
+    private let converter: AVAudioConverter
+    private let target: AVAudioFormat
+    private let source = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
+    private let onBuffer: (AVAudioPCMBuffer, Float) -> Void
+    private(set) var samples: [Float] = []   // kept for Whisper, which wants exactly this format
+
+    init?(target: AVAudioFormat, onBuffer: @escaping (AVAudioPCMBuffer, Float) -> Void) {
+        guard let c = AVAudioConverter(from: source, to: target) else { return nil }
+        converter = c; self.target = target; self.onBuffer = onBuffer
+    }
+
+    func feed(_ pcm: Data) {
+        let n = pcm.count / 2
+        guard n > 0, let buf = AVAudioPCMBuffer(pcmFormat: source, frameCapacity: AVAudioFrameCount(n)), let ch = buf.floatChannelData?[0] else { return }
+        pcm.withUnsafeBytes { raw in
+            let p = raw.bindMemory(to: Int16.self)
+            for i in 0..<n { ch[i] = Float(Int16(littleEndian: p[i])) / 32768 }
+        }
+        buf.frameLength = AVAudioFrameCount(n)
+        samples.append(contentsOf: UnsafeBufferPointer(start: ch, count: n))
+        var rms: Float = 0
+        vDSP_rmsqv(ch, 1, &rms, vDSP_Length(n))
+        let level = max(0, min(1, (20 * log10(max(rms, 1e-6)) + 55) / 45))
+        guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: AVAudioFrameCount(Double(n) * target.sampleRate / 16_000) + 32) else { return }
+        var used = false
+        var error: NSError?
+        converter.convert(to: out, error: &error) { _, status in
+            if used { status.pointee = .noDataNow; return nil }
+            used = true; status.pointee = .haveData
+            return buf
+        }
+        if error == nil, out.frameLength > 0 { onBuffer(out, level) }
+    }
+}

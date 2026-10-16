@@ -1,0 +1,38 @@
+# Yap Mic, the iPhone companion. Generate the Xcode project with XcodeGen:
+#   brew install xcodegen && cd Companion && xcodegen && open YapMic.xcodeproj
+name: YapMic
+options:
+  bundleIdPrefix: app.yap
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  YapMic:
+    type: application
+    platform: iOS
+    sources:
+      - path: YapMic
+      - path: ../Sources/Yap/Remote/MicLink.swift   # the same protocol code as the Mac app
+    settings:
+      base:
+        PRODUCT_NAME: Yap Mic
+        PRODUCT_BUNDLE_IDENTIFIER: app.yap.mic
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""   # pick your team in Xcode → Signing & Capabilities
+    info:
+      path: YapMic/Info.plist
+      properties:
+        CFBundleDisplayName: Yap Mic
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSMicrophoneUsageDescription: Yap Mic sends your voice to Yap on your Mac while you hold the button.
+        NSCameraUsageDescription: Scan the pairing code shown in Yap on your Mac.
+        NSLocalNetworkUsageDescription: Yap Mic finds your Mac on your Wi-Fi so it can be its microphone.
+        NSBonjourServices: [_yapmic._tcp]
+        CFBundleURLTypes:
+          - CFBundleURLName: app.yap.mic
+            CFBundleURLSchemes: [yapmic]

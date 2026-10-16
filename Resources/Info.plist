@@ -27,6 +27,8 @@
     <key>NSMicrophoneUsageDescription</key><string>Yap listens to your voice while you hold the dictation key, and records your narration in screen recordings. Audio never leaves your Mac.</string>
     <key>NSCameraUsageDescription</key><string>Yap shows your camera in a floating bubble during screen recordings.</string>
     <key>NSSpeechRecognitionUsageDescription</key><string>Yap transcribes your speech on-device.</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Yap listens for your paired iPhone on your local network so it can be your wireless microphone.</string>
+    <key>NSBonjourServices</key><array><string>_yapmic._tcp</string></array>
     <key>NSAudioCaptureUsageDescription</key><string>Yap can include your Mac's system audio in screen recordings.</string>
 </dict>
 </plist>

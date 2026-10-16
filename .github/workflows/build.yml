@@ -124,3 +124,17 @@ jobs:
             ${{ env.ZIP }}
             appcast.xml
           fail_on_unmatched_files: false
+
+  iphone:
+    name: Yap Mic (iPhone)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate Xcode project
+        run: brew install xcodegen && cd Companion && xcodegen
+      - name: Build for the iOS Simulator
+        run: |
+          cd Companion
+          xcodebuild -project YapMic.xcodeproj -scheme YapMic -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -20
+          test "${PIPESTATUS[0]}" -eq 0
