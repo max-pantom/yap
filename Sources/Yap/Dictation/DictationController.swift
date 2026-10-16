@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 
 @MainActor
@@ -22,10 +23,16 @@ final class DictationController: ObservableObject {
     private var selectionTask: Task<String?, Never>?
     private var startedAt = Date()
     private let history: HistoryStore
+    /// The last paste, so "scratch that" can take it back.
+    private var lastDelivery: (app: pid_t, at: Date)?
 
     init(history: HistoryStore) {
         self.history = history
         hotkeys.onEvent = { [weak self] event in self?.handle(event) }
+        CorrectionLearner.shared.onLearn = { [weak self] pairs in
+            let list = pairs.map { "“\($0.1)”" }.joined(separator: ", ")
+            self?.show("Learned \(list) · edit in Settings → Words", symbol: "character.book.closed.fill", error: false, seconds: 3)
+        }
     }
 
     func boot() {
@@ -72,6 +79,12 @@ final class DictationController: ObservableObject {
         case .thinking:
             break
         }
+    }
+
+    /// Starts dictation that keeps listening until finished (Flow bar click, yap:// links).
+    func beginHandsFree(command: Bool) {
+        begin(command: command)
+        if phase == .listening { phase = .locked; FlowBar.shared.update() }
     }
 
     func begin(command: Bool) {
@@ -161,6 +174,18 @@ final class DictationController: ObservableObject {
             return
         }
 
+        var commands = VoiceCommands.Parsed(text: raw)
+        if !isCommand, VoiceCommands.isEnabled {
+            commands = VoiceCommands.parse(raw)
+            if commands.undoLast { await undoLastDictation(); return }
+            raw = commands.text
+            if raw.isEmpty {
+                reset()
+                if commands.pressReturn { TextBridge.press(kVK_Return) }
+                return
+            }
+        }
+
         let appName = targetApp?.localizedName
         let output: String
         if isCommand {
@@ -180,6 +205,15 @@ final class DictationController: ObservableObject {
             try? await Task.sleep(for: .milliseconds(120))
         }
         let result = TextBridge.deliver(output)
+        if result != .copiedOnly {
+            if let app = targetApp { lastDelivery = (app.processIdentifier, Date()) }
+            if commands.pressReturn {
+                try? await Task.sleep(for: .milliseconds(220)) // let the paste land before sending
+                TextBridge.press(kVK_Return)
+            } else {
+                CorrectionLearner.shared.watch(pasted: output)
+            }
+        }
         Log.write("delivered \(result) ax=\(AXIsProcessTrusted()) post=\(CGPreflightPostEventAccess()) after \(String(format: "%.2f", Date().timeIntervalSince(stoppedAt)))s (speech→text \(String(format: "%.2f", heardAt.timeIntervalSince(stoppedAt)))s)")
         history.add(.init(raw: raw, text: output, app: appName, duration: duration, isCommand: isCommand))
         reset()
@@ -191,6 +225,19 @@ final class DictationController: ObservableObject {
         case .pastedBlind: show("Copied to clipboard. Press ⌘V if it didn't paste", symbol: "doc.on.clipboard.fill", error: false, seconds: 3)
         case .copiedOnly: show("Copied: press ⌘V. Allow Accessibility for auto-paste", symbol: "doc.on.clipboard.fill", error: false, seconds: 4)
         }
+    }
+
+    /// "Scratch that" on its own: undo the last paste in the app it went to.
+    private func undoLastDictation() async {
+        reset()
+        guard let last = lastDelivery, Date().timeIntervalSince(last.at) < 180,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == last.app else {
+            show("Nothing to scratch", symbol: "arrow.uturn.backward", error: false)
+            return
+        }
+        lastDelivery = nil
+        TextBridge.press(kVK_ANSI_Z, flags: .maskCommand)
+        show("Removed your last dictation", symbol: "arrow.uturn.backward", error: false, seconds: 1.6)
     }
 
     /// Re-insert a past dictation (from the history list or the menu).

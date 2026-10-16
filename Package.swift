@@ -6,11 +6,15 @@ let package = Package(
     platforms: [.macOS(.v26)],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.1"),
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.9.6"),
     ],
     targets: [
         .executableTarget(
             name: "Yap",
-            dependencies: [.product(name: "WhisperKit", package: "WhisperKit")],
+            dependencies: [
+                .product(name: "WhisperKit", package: "WhisperKit"),
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/Yap",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [

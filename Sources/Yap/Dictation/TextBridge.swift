@@ -89,6 +89,9 @@ enum TextBridge {
         return result
     }
 
+    /// Presses a key in the focused app (Return after "send it", ⌘Z for "scratch that").
+    static func press(_ key: Int, flags: CGEventFlags = []) { postKey(key, flags: flags) }
+
     private static func postKey(_ key: Int, flags: CGEventFlags) {
         let src = CGEventSource(stateID: .combinedSessionState)
         let down = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(key), keyDown: true)

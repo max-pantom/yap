@@ -53,6 +53,7 @@ private struct GeneralTab: View {
     @AppStorage(Prefs.Key.sounds) var sounds = true
     @AppStorage(Prefs.Key.showFlowBar) var showFlowBar = true
     @AppStorage(Prefs.Key.startupAnimation) var startupAnimation = true
+    @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -64,11 +65,30 @@ private struct GeneralTab: View {
                 .font(.caption).foregroundStyle(.secondary)
             Button("Reset Flow bar position") { FlowBar.shared.resetPosition() }
             Toggle("Play the mark animation when Yap starts", isOn: $startupAnimation)
+            if Updater.shared.isAvailable {
+                Toggle("Check for updates automatically", isOn: Binding(get: { Updater.shared.automaticallyChecks }, set: { Updater.shared.automaticallyChecks = $0 }))
+                Button("Check for Updates Now") { Updater.shared.checkForUpdates() }
+            }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, on in
                     do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
                     catch { launchAtLogin = !on }
                 }
+            Section("Shortcuts & automation") {
+                Toggle("Allow yap:// links", isOn: $urlCommands)
+                Text("Lets Shortcuts, Raycast, Alfred, Stream Deck or scripts control Yap. In Shortcuts, use the “Open URLs” action. Browsers ask before opening a link.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if urlCommands {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(URLCommands.reference, id: \.0) { url, what in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(url).font(.caption.monospaced()).textSelection(.enabled).frame(width: 190, alignment: .leading)
+                                Text(what).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
             Section("Privacy") {
                 Text("Everything runs on this Mac: speech recognition, AI cleanup, summaries. No account, no uploads, no analytics.")
                     .foregroundStyle(.secondary)
@@ -83,6 +103,8 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.cleanupStyle) var style = CleanupStyle.polished.rawValue
     @AppStorage(Prefs.Key.locale) var locale = ""
     @AppStorage(Prefs.Key.keepOnClipboard) var keepOnClipboard = true
+    @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
+    @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
     @Local private var locales: [String] = []
 
     var body: some View {
@@ -100,6 +122,12 @@ private struct DictationTab: View {
             MicPicker()
             Toggle("Keep dictation on the clipboard after pasting", isOn: $keepOnClipboard)
             Text("When you stop talking, Yap pastes at your cursor. With this on, the text also stays on your clipboard, so it's never lost if no text field was focused.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Learn from my corrections", isOn: $learnCorrections)
+            Text("Fix a word right after Yap pastes it (say “Jon” → “John”) and Yap adds it to your dictionary. It only reads the text field you just dictated into, for 45 seconds, on this Mac.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Voice commands", isOn: $voiceCommands)
+            Text("Say “scratch that” to drop the sentence before it, or on its own to remove your last dictation. End with “send it” or “press enter” to press Return after pasting. “New line” and “new paragraph” always work.")
                 .font(.caption).foregroundStyle(.secondary)
             Picker("Cleanup", selection: $style) {
                 ForEach(CleanupStyle.allCases) { Text($0.label).tag($0.rawValue) }
@@ -156,6 +184,8 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.recAutoCopy) var autoCopy = true
     @AppStorage(Prefs.Key.recCodec) var codec = "h264"
     @AppStorage(Prefs.Key.recFPS) var fps = 30
+    @AppStorage(Prefs.Key.autoZoom) var autoZoom = true
+    @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
 
     var body: some View {
         Form {
@@ -169,6 +199,15 @@ private struct RecordingTab: View {
             Toggle("Record microphone", isOn: $mic)
             Toggle("Record system audio", isOn: $systemAudio)
             Toggle("Highlight mouse clicks", isOn: $clicks)
+            Toggle("Auto-zoom on clicks", isOn: $autoZoom)
+            if autoZoom {
+                LabeledContent("Zoom") {
+                    Slider(value: $zoomLevel, in: 1.3...2.6, step: 0.1) { Text("Zoom") } minimumValueLabel: { Text("Subtle") } maximumValueLabel: { Text("Close") }
+                        .labelsHidden().frame(width: 260)
+                }
+            }
+            Text("When you stop a full-screen recording, Yap smoothly zooms in where you click and follows your pointer, then eases back out. The original is kept: use Remove Zoom in the Library to get it back.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("3-second countdown", isOn: $countdown)
             Toggle("Copy video to clipboard when done", isOn: $autoCopy)
             Picker("Format", selection: $codec) {

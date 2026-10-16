@@ -20,17 +20,96 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # Optional: each release step below turns on only when its secrets exist (see docs/RELEASING.md).
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
+      HAS_SPARKLE: ${{ secrets.SPARKLE_PRIVATE_KEY != '' && vars.SPARKLE_PUBLIC_KEY != '' }}
+      SPARKLE_VERSION: 2.9.6
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
       - name: Toolchain
         run: swift --version && xcrun --show-sdk-version
+
+      - name: Version from tag
+        if: env.RELEASE_TAG != ''
+        run: |
+          echo "YAP_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          echo "YAP_BUILD=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "ZIP=Yap-${RELEASE_TAG}-macOS-arm64.zip" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID certificate
+        if: env.RELEASE_TAG != '' && env.HAS_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/build.keychain-db"; KC_PW="$(uuidgen)"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          ID="$(security find-identity -v -p codesigning "$KC" | grep 'Developer ID Application' | head -1 | sed -E 's/.*"(.*)"/\1/')"
+          [[ -n "$ID" ]] || { echo "No Developer ID Application identity in the certificate"; exit 1; }
+          echo "SIGN_IDENTITY=$ID" >> "$GITHUB_ENV"
+
       - name: Build app bundle
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ env.RELEASE_TAG != '' && vars.SPARKLE_PUBLIC_KEY || '' }}
         run: ./build.sh
+
+      - name: Notarize
+        if: env.RELEASE_TAG != '' && env.HAS_CERT == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent build/Yap.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait --timeout 30m
+          xcrun stapler staple build/Yap.app
+          spctl --assess --type execute -vv build/Yap.app
+
       - name: Package release build
         if: env.RELEASE_TAG != ''
-        run: ditto -c -k --sequesterRsrc --keepParent build/Yap.app "Yap-${RELEASE_TAG}-macOS-arm64.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent build/Yap.app "$ZIP"
+
+      - name: Sign update and write appcast
+        if: env.RELEASE_TAG != '' && env.HAS_SPARKLE == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o "$RUNNER_TEMP/sparkle.tar.xz"
+          mkdir -p "$RUNNER_TEMP/sparkle" && tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          KEY="$RUNNER_TEMP/ed25519.key"; ( umask 077; printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY" )
+          SIG="$("$RUNNER_TEMP/sparkle/bin/sign_update" --ed-key-file "$KEY" "$ZIP")"
+          rm -f "$KEY"
+          REPO="https://github.com/${GITHUB_REPOSITORY}"
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Yap</title>
+              <item>
+                <title>Yap ${YAP_VERSION}</title>
+                <pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+                <sparkle:version>${YAP_BUILD}</sparkle:version>
+                <sparkle:shortVersionString>${YAP_VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                <sparkle:releaseNotesLink>${REPO}/releases/tag/${RELEASE_TAG}</sparkle:releaseNotesLink>
+                <enclosure url="${REPO}/releases/download/${RELEASE_TAG}/${ZIP}" ${SIG} type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          EOF
+          cat appcast.xml
+
       - name: Upload Yap.app
         uses: actions/upload-artifact@v4
         with:
@@ -41,4 +120,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: Yap-${{ env.RELEASE_TAG }}-macOS-arm64.zip
+          files: |
+            ${{ env.ZIP }}
+            appcast.xml
+          fail_on_unmatched_files: false

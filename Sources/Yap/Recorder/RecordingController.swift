@@ -12,6 +12,8 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
 
     let camera = CameraBubble()
     private var recorder: ScreenRecorder?
+    private let clicks = ClickTracker()
+    private var trackedScreen: CGRect?
     private var cameraWasVisible = false
     private let library: LibraryStore
 
@@ -47,7 +49,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
             let me = content.applications.filter { $0.processID == getpid() }
             let bubble = content.windows.filter { w in camera.windowNumber.map { CGWindowID($0) == w.windowID } ?? false }
             let filter = SCContentFilter(display: display, excludingApplications: me, exceptingWindows: bubble)
-            await begin(with: filter)
+            await begin(with: filter, screen: screen?.frame)
         } catch {
             fail(error)
         }
@@ -82,7 +84,8 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         Task { @MainActor in self.fail(error) }
     }
 
-    private func begin(with filter: SCContentFilter) async {
+    /// `screen` is the recorded display's frame, for auto-zoom. Window and app recordings don't zoom.
+    private func begin(with filter: SCContentFilter, screen: CGRect? = nil) async {
         if UserDefaults.standard.bool(forKey: Prefs.Key.recCountdown) {
             phase = .countdown
             let ok = await Countdown.run(seconds: 3)
@@ -117,6 +120,8 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         }
         self.recorder = recorder
         startedAt = Date()
+        trackedScreen = screen
+        if let screen { clicks.start(screen: screen) }
         phase = .recording
         ControlBar.shared.show(for: self)
     }
@@ -129,6 +134,8 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         phase = .processing
         processingStatus = "Finishing video…"
         let url: URL?
+        let clickLog = trackedScreen != nil ? clicks.stop() : nil
+        trackedScreen = nil
         do { url = try await recorder.stop() } catch { fail(error); return }
         self.recorder = nil
         startedAt = nil
@@ -143,6 +150,19 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         }
         library.reload()
 
+        if let clickLog, !clickLog.clicks.isEmpty {
+            clickLog.save(for: url)
+            if UserDefaults.standard.bool(forKey: Prefs.Key.autoZoom) {
+                processingStatus = "Adding auto-zoom…"
+                do {
+                    // Same path, so a copy already on the clipboard pastes the zoomed version.
+                    if try await VideoEffects.applyAutoZoom(to: url) { HUD.shared.toast("Auto-zoom added", symbol: "plus.magnifyingglass") }
+                } catch {
+                    Log.write("auto-zoom failed: \(error.localizedDescription)")
+                }
+            }
+        }
+
         // Transcript, captions, AI title, summary and chapters, all on-device.
         let finalURL = await RecordingProcessor.process(url) { [weak self] status in
             Task { @MainActor in self?.processingStatus = status }
@@ -155,6 +175,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
     func cancel() {
         guard phase == .recording, let recorder else { return }
         ControlBar.shared.hide()
+        clicks.stop(); trackedScreen = nil
         Task {
             let url = try? await recorder.stop()
             if let url { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
@@ -182,6 +203,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
 
     private func fail(_ error: Error) {
         ControlBar.shared.hide()
+        clicks.stop(); trackedScreen = nil
         recorder = nil
         startedAt = nil
         phase = .idle
@@ -222,6 +244,12 @@ struct RecordingMeta: Codable, Hashable {
 
     static func sidecar(for video: URL) -> URL { video.deletingPathExtension().appendingPathExtension("yap.json") }
     static func captions(for video: URL) -> URL { video.deletingPathExtension().appendingPathExtension("srt") }
+    /// The un-zoomed original, kept in a hidden folder next to the recordings.
+    static func original(for video: URL) -> URL {
+        video.deletingLastPathComponent().appendingPathComponent(".originals", isDirectory: true).appendingPathComponent(video.lastPathComponent)
+    }
+    /// Every file that belongs to a recording, other than the video itself.
+    static func companions(for video: URL) -> [URL] { [sidecar(for: video), captions(for: video), ClickLog.url(for: video), original(for: video)] }
 
     static func load(for video: URL) -> RecordingMeta? {
         guard let data = try? Data(contentsOf: sidecar(for: video)) else { return nil }
@@ -289,8 +317,7 @@ enum RecordingProcessor {
         let fm = FileManager.default
         do {
             try fm.moveItem(at: video, to: target)
-            try? fm.moveItem(at: RecordingMeta.sidecar(for: video), to: RecordingMeta.sidecar(for: target))
-            try? fm.moveItem(at: RecordingMeta.captions(for: video), to: RecordingMeta.captions(for: target))
+            for (from, to) in zip(RecordingMeta.companions(for: video), RecordingMeta.companions(for: target)) { try? fm.moveItem(at: from, to: to) }
             return target
         } catch {
             return video

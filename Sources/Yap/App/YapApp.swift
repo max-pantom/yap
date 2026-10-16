@@ -23,6 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated { AppModel.shared.boot() }
     }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated { urls.forEach(URLCommands.handle) }
+    }
 }
 
 @MainActor
@@ -42,6 +46,7 @@ final class AppModel: ObservableObject {
 
     func boot() {
         Prefs.registerDefaults()
+        Updater.shared.start()
         dictation.boot()
         library.reload()
 
@@ -172,6 +177,7 @@ struct MenuContent: View {
         RecentDictations(history: model.history, dictation: model.dictation)
         Button("Open Library…") { model.showLibrary() }.keyboardShortcut("l")
         Button("Settings…") { model.showSettings() }.keyboardShortcut(",")
+        if Updater.shared.isAvailable { Button("Check for Updates…") { Updater.shared.checkForUpdates() } }
         Divider()
         Button("Quit Yap") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }

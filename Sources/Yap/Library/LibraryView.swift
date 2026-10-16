@@ -118,10 +118,13 @@ private struct RecordingDetail: View {
     @Local private var title = ""
     @Local private var transcriptQuery = ""
     @Local private var status = ""
+    @Local private var busy = false
+    @Local private var blurring = false
+    @Local private var reloadToken = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PlayerViewRep(handle: player, url: recording.url)
+            PlayerViewRep(handle: player, url: recording.url, token: reloadToken)
                 .frame(minHeight: 260)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -156,6 +159,35 @@ private struct RecordingDetail: View {
             }
         }
         .onAppear { title = recording.title }
+        .sheet(isPresented: $blurring) {
+            BlurEditor(url: recording.url, at: player.currentTime) { regions in
+                blurring = false
+                guard let regions, !regions.isEmpty else { return }
+                run("Blurring…", done: "Blurred copy saved") { _ = try await library.exportBlurred(recording, regions: regions) }
+            }
+        }
+    }
+
+    private func run(_ working: String, done: String, _ work: @escaping () async throws -> Void) {
+        busy = true; status = working
+        Task {
+            do { try await work(); status = done; reloadToken = UUID() } catch { status = error.localizedDescription }
+            busy = false
+        }
+    }
+
+    @ViewBuilder private var effects: some View {
+        if library.hasOriginal(recording) {
+            Button { run("Restoring…", done: "Original restored (zoomed copy is in the Trash)") { try library.restoreOriginal(recording) } } label: {
+                Label("Remove Zoom", systemImage: "minus.magnifyingglass")
+            }.help("Put back the recording without auto-zoom")
+        } else if library.canAutoZoom(recording) {
+            Button { run("Adding auto-zoom…", done: "Auto-zoom added") { try await library.autoZoom(recording) } } label: {
+                Label("Auto-zoom", systemImage: "plus.magnifyingglass")
+            }.help("Zoom in where you clicked")
+        }
+        Button { player.pause(); blurring = true } label: { Label("Blur…", systemImage: "eye.slash") }
+            .help("Hide emails, keys or names")
     }
 
     private var actions: some View {
@@ -182,6 +214,8 @@ private struct RecordingDetail: View {
                     }
                 }
             } label: { Label("Trim", systemImage: "timeline.selection") }
+            effects
+            if busy { ProgressView().controlSize(.small) }
             Spacer()
             Button { NSWorkspace.shared.activateFileViewerSelecting([recording.url]) } label: { Image(systemName: "magnifyingglass") }
                 .help("Show in Finder")
@@ -214,6 +248,9 @@ private struct RecordingDetail: View {
 final class PlayerHandle: ObservableObject {
     weak var view: AVPlayerView?
 
+    var currentTime: Double { view?.player?.currentTime().seconds ?? 0 }
+    func pause() { view?.player?.pause() }
+
     func seek(_ seconds: Double) {
         view?.player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         view?.player?.play()
@@ -236,6 +273,11 @@ final class PlayerHandle: ObservableObject {
 struct PlayerViewRep: NSViewRepresentable {
     let handle: PlayerHandle
     let url: URL
+    /// Change it to reload the file after it was rewritten in place (auto-zoom, restore).
+    var token = UUID()
+
+    final class Coordinator { var token: UUID?; }
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> AVPlayerView {
         let v = AVPlayerView()
@@ -243,12 +285,16 @@ struct PlayerViewRep: NSViewRepresentable {
         v.showsSharingServiceButton = true
         v.allowsPictureInPicturePlayback = true
         v.player = AVPlayer(url: url)
+        context.coordinator.token = token
         handle.view = v
         return v
     }
 
     func updateNSView(_ v: AVPlayerView, context: Context) {
-        if (v.player?.currentItem?.asset as? AVURLAsset)?.url != url { v.player = AVPlayer(url: url) }
+        if (v.player?.currentItem?.asset as? AVURLAsset)?.url != url || context.coordinator.token != token {
+            context.coordinator.token = token
+            v.player = AVPlayer(url: url)
+        }
         handle.view = v
     }
 

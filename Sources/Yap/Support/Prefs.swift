@@ -33,6 +33,11 @@ enum Prefs {
         static let openaiModel = "models.openaiModel"
         static let cameraID = "device.camera"             // "" = automatic
         static let micID = "device.mic"                   // "" = system default
+        static let learnCorrections = "dictation.learnCorrections"
+        static let voiceCommands = "dictation.voiceCommands"
+        static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
+        static let autoZoom = "rec.autoZoom"
+        static let zoomLevel = "rec.zoomLevel"
     }
 
     static func registerDefaults() {
@@ -64,6 +69,11 @@ enum Prefs {
             Key.openaiModel: "",
             Key.cameraID: "",
             Key.micID: "",
+            Key.learnCorrections: true,
+            Key.voiceCommands: true,
+            Key.urlCommands: true,
+            Key.autoZoom: true,
+            Key.zoomLevel: 1.8,
         ])
     }
 

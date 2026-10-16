@@ -10,11 +10,20 @@
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>SUFeedURL</key><string>https://github.com/max-pantom/yap/releases/latest/download/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key><true/>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSCameraUseContinuityCameraDeviceType</key><true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>app.yap.mac</string>
+            <key>CFBundleURLSchemes</key><array><string>yap</string></array>
+        </dict>
+    </array>
     <key>NSMicrophoneUsageDescription</key><string>Yap listens to your voice while you hold the dictation key, and records your narration in screen recordings. Audio never leaves your Mac.</string>
     <key>NSCameraUsageDescription</key><string>Yap shows your camera in a floating bubble during screen recordings.</string>
     <key>NSSpeechRecognitionUsageDescription</key><string>Yap transcribes your speech on-device.</string>
