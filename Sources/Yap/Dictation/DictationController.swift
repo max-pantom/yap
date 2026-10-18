@@ -230,8 +230,14 @@ final class DictationController: ObservableObject {
         }
 
         let appName = targetApp?.localizedName
-        let output: String
-        if isCommand {
+        var output: String
+        // Spoken maths ("what's 40 plus 20", "… 40 plus 20 equals") is worked out exactly, never by the AI.
+        if !isCommand, VoiceCommands.isEnabled, let math = SpokenMath.evaluate(raw) {
+            switch math {
+            case .answer(let v): output = v
+            case .inline(let s): output = s.prefix(1).uppercased() + s.dropFirst()
+            }
+        } else if isCommand {
             let selection = await selectionTask?.value
             guard let result = await Polisher.shared.command(raw, selection: selection, app: appName) else {
                 fail("Command Mode needs Apple Intelligence enabled.")
@@ -240,6 +246,16 @@ final class DictationController: ObservableObject {
             output = result
         } else {
             output = await Polisher.shared.clean(raw, app: appName)
+            // "…translate to French", or Settings → Dictation → Always translate to.
+            let saved = UserDefaults.standard.string(forKey: Prefs.Key.translateTo) ?? ""
+            if let language = commands.translateTo ?? (saved.isEmpty ? nil : saved) {
+                guard let translated = await Polisher.shared.translate(output, to: language, app: appName), !translated.isEmpty else {
+                    fail("Translation needs Apple Intelligence or a second model (Settings → Models)")
+                    return
+                }
+                Log.write("translated to \(language)")
+                output = translated
+            }
         }
 
         // Focus normally never leaves the target app (the Flow bar is non-activating), but be safe.

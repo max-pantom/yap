@@ -35,6 +35,7 @@ enum Prefs {
         static let micID = "device.mic"                   // "" = system default
         static let learnCorrections = "dictation.learnCorrections"
         static let voiceCommands = "dictation.voiceCommands"
+        static let translateTo = "dictation.translateTo"    // "" = off, else a language name ("French")
         static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
         static let autoZoom = "rec.autoZoom"
         static let zoomLevel = "rec.zoomLevel"
@@ -71,6 +72,7 @@ enum Prefs {
             Key.micID: "",
             Key.learnCorrections: true,
             Key.voiceCommands: true,
+            Key.translateTo: "",
             Key.urlCommands: true,
             Key.autoZoom: true,
             Key.zoomLevel: 1.8,

@@ -105,6 +105,7 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.keepOnClipboard) var keepOnClipboard = true
     @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
     @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
+    @AppStorage(Prefs.Key.translateTo) var translateTo = ""
     @Local private var locales: [String] = []
 
     var body: some View {
@@ -127,7 +128,13 @@ private struct DictationTab: View {
             Text("Fix a word right after Yap pastes it (say “Jon” → “John”) and Yap adds it to your dictionary. It only reads the text field you just dictated into, for 45 seconds, on this Mac.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Voice commands", isOn: $voiceCommands)
-            Text("Say “scratch that” to drop the sentence before it, or on its own to remove your last dictation. End with “send it” or “press enter” to press Return after pasting. “New line” and “new paragraph” always work.")
+            Text("Say “scratch that” to drop the sentence before it, or on its own to remove your last dictation. End with “send it” or “press enter” to press Return after pasting. End with “translate to French” (any language) to paste the translation. Say “what's 40 plus 20” for the answer, or end a sum with “equals” to have it worked out. “New line” and “new paragraph” always work.")
+                .font(.caption).foregroundStyle(.secondary)
+            Picker("Always translate to", selection: $translateTo) {
+                Text("Off (keep my language)").tag("")
+                ForEach(Array(Set(VoiceCommands.languages.values)).sorted(), id: \.self) { Text($0).tag($0) }
+            }
+            Text("Talk in any language Yap understands and paste in this one. Uses your AI model (Settings → Models); quality varies by language.")
                 .font(.caption).foregroundStyle(.secondary)
             Picker("Cleanup", selection: $style) {
                 ForEach(CleanupStyle.allCases) { Text($0.label).tag($0.rawValue) }

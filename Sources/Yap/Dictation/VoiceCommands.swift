@@ -2,13 +2,39 @@ import Foundation
 
 /// Spoken commands that act on the text instead of being typed:
 /// "scratch that" drops the sentence before it (on its own, it removes your last dictation),
-/// and ending with "send it" / "press enter" presses Return after pasting.
+/// ending with "send it" / "press enter" presses Return after pasting, and "…translate to French"
+/// (or starting with "Translate to French:") pastes the translation instead.
 enum VoiceCommands {
     struct Parsed: Equatable {
         var text: String
         var pressReturn = false
         var undoLast = false
+        /// A language name ("French") when the dictation asked to be translated.
+        var translateTo: String?
     }
+
+    /// Languages people can name, spoken form → the name given to the model.
+    static let languages: [String: String] = {
+        var m: [String: String] = [:]
+        for name in ["English", "French", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Swedish", "Norwegian",
+                     "Danish", "Finnish", "Polish", "Czech", "Greek", "Turkish", "Russian", "Ukrainian", "Arabic", "Hebrew",
+                     "Hindi", "Bengali", "Urdu", "Chinese", "Japanese", "Korean", "Vietnamese", "Thai", "Indonesian",
+                     "Malay", "Swahili", "Yoruba", "Igbo", "Hausa", "Amharic", "Zulu", "Afrikaans", "Romanian", "Hungarian"] {
+            m[name.lowercased()] = name
+        }
+        m["mandarin"] = "Chinese (Mandarin, simplified)"; m["cantonese"] = "Cantonese"
+        m["pidgin"] = "Nigerian Pidgin"; m["nigerian pidgin"] = "Nigerian Pidgin"
+        m["brazilian portuguese"] = "Brazilian Portuguese"; m["spanish"] = "Spanish"
+        return m
+    }()
+    private static let languagePattern = languages.keys.sorted { $0.count > $1.count }
+        .map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+    private static let translateTail = try! NSRegularExpression(
+        pattern: "[,;]?\\s*\\b(?:and\\s+)?(?:please\\s+)?translate(?:\\s+(?:it|this|that|everything|all of that|all of this))?\\s+(?:in)?to\\s+(\(languagePattern))\\b[\\s.,!?]*$",
+        options: [.caseInsensitive])
+    private static let translateHead = try! NSRegularExpression(
+        pattern: "^\\s*(?:please\\s+)?translate(?:\\s+(?:this|that|it))?\\s+(?:in)?to\\s+(\(languagePattern))\\b[\\s:,.]*",
+        options: [.caseInsensitive])
 
     static var isEnabled: Bool { UserDefaults.standard.bool(forKey: Prefs.Key.voiceCommands) }
 
@@ -35,6 +61,17 @@ enum VoiceCommands {
             }
         }
 
+        // "…translate to French" at the end, or "Translate to French: …" at the start.
+        var translateTo: String?
+        for pattern in [translateTail, translateHead] {
+            if let m = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+               let r = Range(m.range, in: text), let lr = Range(m.range(at: 1), in: text) {
+                translateTo = languages[text[lr].lowercased()]
+                text.removeSubrange(r)
+                break
+            }
+        }
+
         // Each "scratch that" removes the sentence (or clause run) right before it.
         while let m = scratchPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let r = Range(m.range, in: text) {
@@ -48,6 +85,6 @@ enum VoiceCommands {
         }
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = text.first, first.isLowercase, raw.first?.isUppercase == true { text = first.uppercased() + text.dropFirst() }
-        return Parsed(text: text, pressReturn: pressReturn)
+        return Parsed(text: text, pressReturn: pressReturn, translateTo: translateTo)
     }
 }
