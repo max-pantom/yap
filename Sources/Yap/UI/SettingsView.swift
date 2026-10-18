@@ -6,16 +6,21 @@ import SwiftUI
 @MainActor
 final class SettingsNav: ObservableObject {
     static let shared = SettingsNav()
-    @Published var page: SettingsView.Page = .dictation
+    @Published var page: SettingsView.Page = .general
 }
 
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject private var nav = SettingsNav.shared
+    @AppStorage(Prefs.Key.labsIPhoneMic) private var iPhoneMic = false
+
+    /// Experimental pages only show once they're switched on in General → Experimental.
+    private var pages: [Page] { Page.allCases.filter { $0 != .iphone || iPhoneMic } }
 
     enum Page: String, CaseIterable, Identifiable {
-        case dictation = "Dictation", commands = "Voice Commands", words = "Words & Snippets", recording = "Recording",
-             iphone = "iPhone Mic", models = "AI Models", shortcuts = "Shortcuts", permissions = "Permissions", general = "General"
+        case general = "General", dictation = "Dictation", commands = "Voice Commands", words = "Words & Snippets",
+             recording = "Recording", models = "AI Models", shortcuts = "Shortcuts", permissions = "Permissions",
+             iphone = "iPhone Mic"
         var id: String { rawValue }
         var symbol: String {
             switch self {
@@ -39,10 +44,8 @@ struct SettingsView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            List(selection: Binding(get: { nav.page }, set: { if let p = $0 { nav.page = p } })) {
-                Section { ForEach(Page.allCases.prefix(4)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
-                Section("More") { ForEach(Page.allCases.dropFirst(4).prefix(3)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
-                Section("Setup") { ForEach(Page.allCases.suffix(2)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
+            List(pages, selection: Binding(get: { nav.page }, set: { if let p = $0 { nav.page = p } })) { p in
+                Label(p.rawValue, systemImage: p.symbol).tag(p)
             }
             .listStyle(.sidebar)
             .frame(width: 190)
@@ -53,7 +56,7 @@ struct SettingsView: View {
                 case .commands: VoiceCommandsTab()
                 case .words: WordsTab()
                 case .recording: RecordingTab()
-                case .iphone: IPhoneTab(remote: RemoteMic.shared)
+                case .iphone: if iPhoneMic { IPhoneTab(remote: RemoteMic.shared) } else { GeneralTab() }
                 case .models: ModelsTab()
                 case .shortcuts: ShortcutsTab()
                 case .permissions:
@@ -112,6 +115,7 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
     @AppStorage(Prefs.Key.translateTo) var translateTo = ""
     @AppStorage(Prefs.Key.fitToCursor) var fitToCursor = true
+    @AppStorage(Prefs.Key.labsTranslate) var translateOn = false
     @Local private var locales: [String] = []
 
     private var currentStyle: CleanupStyle { CleanupStyle(rawValue: style) ?? .polished }
@@ -166,13 +170,13 @@ private struct DictationTab: View {
                     Text("Fit in with the text around the cursor")
                     Text("Mid-sentence, Yap adds the space and keeps it lowercase. Names keep their capitals.")
                 }
-                Picker(selection: $translateTo) {
+                if translateOn { Picker(selection: $translateTo) {
                     Text("Off").tag("")
                     ForEach(Array(Set(VoiceCommands.languages.values)).sorted(), id: \.self) { Text($0).tag($0) }
                 } label: {
                     Text("Always translate to")
                     Text("Talk in your language, type in this one. To translate just once, say “…translate to French”.")
-                }
+                } }
                 Toggle(isOn: $keepOnClipboard) {
                     Text("Also copy it to the clipboard")
                     Text("If no text box was selected, press ⌘V to paste it yourself.")
@@ -203,6 +207,7 @@ private struct DictationTab: View {
 
 private struct VoiceCommandsTab: View {
     @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
+    @AppStorage(Prefs.Key.labsTranslate) var translateOn = false
 
     var body: some View {
         Form {
@@ -223,10 +228,10 @@ private struct VoiceCommandsTab: View {
                     CommandRow(say: "…send it", does: "Types the message, then presses Return")
                     CommandRow(say: "…press enter", does: "Same as “send it”")
                 }
-                Section("Translate") {
+                if translateOn { Section("Translate") {
                     CommandRow(say: "…translate to French", does: "Types it in French. Works with about 40 languages")
                     CommandRow(say: "Translate to Spanish: …", does: "Same, said at the start")
-                }
+                } }
                 Section("Maths") {
                     CommandRow(say: "what's 40 plus 20", does: "Types 60")
                     CommandRow(say: "…40 plus 20 equals", does: "Types 40 + 20 = 60")
@@ -456,6 +461,9 @@ private struct GeneralTab: View {
     @AppStorage(Prefs.Key.showFlowBar) var showFlowBar = true
     @AppStorage(Prefs.Key.startupAnimation) var startupAnimation = true
     @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
+    @AppStorage(Prefs.Key.showExperimental) var showExperimental = false
+    @AppStorage(Prefs.Key.labsIPhoneMic) var iPhoneMic = false
+    @AppStorage(Prefs.Key.labsTranslate) var translate = false
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -517,6 +525,30 @@ private struct GeneralTab: View {
             Section("Privacy") {
                 Text("Everything runs on this Mac: speech recognition, AI clean-up and summaries. No account, no uploads, no analytics.")
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle(isOn: $showExperimental) {
+                    Text("Show experimental features")
+                    Text("Early features that may change, or not always work yet.")
+                }
+                if showExperimental {
+                    Toggle(isOn: $iPhoneMic) {
+                        Label("iPhone Mic", systemImage: "iphone")
+                        Text("Use your iPhone as a wireless microphone. Needs the Yap Mic app. Adds an iPhone Mic page.")
+                    }
+                    .onChange(of: iPhoneMic) { _, _ in RemoteMic.shared.refresh() }
+                    Toggle(isOn: $translate) {
+                        Label("Translate", systemImage: "globe")
+                        Text("Say “…translate to French” or pick a language to always type in. Quality depends on your AI model.")
+                    }
+                }
+            } header: {
+                Text("Experimental")
+            } footer: {
+                if showExperimental && (iPhoneMic || translate) {
+                    Text("Turning off the list hides it but keeps what's switched on.")
+                }
             }
         }
         .formStyle(.grouped)

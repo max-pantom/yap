@@ -91,9 +91,12 @@ final class RemoteMic: ObservableObject {
 
     // MARK: Listener
 
+    /// Turning the experiment on or off starts or stops listening.
+    func refresh() { startListening() }
+
     private func startListening() {
         stopListening()
-        guard let pairing else { state = .off; return }
+        guard Prefs.iPhoneMicOn, let pairing else { state = .off; return }
         do {
             let l = try NWListener(using: MicLink.parameters(pairing))
             l.service = NWListener.Service(name: pairing.service, type: MicLink.serviceType)

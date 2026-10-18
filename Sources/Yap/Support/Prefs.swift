@@ -38,6 +38,9 @@ enum Prefs {
         static let translateTo = "dictation.translateTo"    // "" = off, else a language name ("French")
         static let fitToCursor = "dictation.fitToCursor"    // match spacing/capitals to the text around the cursor
         static let showKeystrokes = "rec.showKeystrokes"
+        static let showExperimental = "labs.visible"       // the Experimental list in General
+        static let labsIPhoneMic = "labs.iphoneMic"
+        static let labsTranslate = "labs.translate"
         static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
         static let autoZoom = "rec.autoZoom"
         static let zoomLevel = "rec.zoomLevel"
@@ -77,6 +80,9 @@ enum Prefs {
             Key.translateTo: "",
             Key.fitToCursor: true,
             Key.showKeystrokes: true,
+            Key.showExperimental: false,
+            Key.labsIPhoneMic: false,
+            Key.labsTranslate: false,
             Key.urlCommands: true,
             Key.autoZoom: true,
             Key.zoomLevel: 1.8,
@@ -84,6 +90,9 @@ enum Prefs {
     }
 
     static var d: UserDefaults { .standard }
+    /// Experimental features: off and out of sight until turned on in General → Experimental.
+    static var iPhoneMicOn: Bool { d.bool(forKey: Key.labsIPhoneMic) }
+    static var translateOn: Bool { d.bool(forKey: Key.labsTranslate) }
     static var style: CleanupStyle { CleanupStyle(rawValue: d.string(forKey: Key.cleanupStyle) ?? "") ?? .polished }
     static var sounds: Bool { d.bool(forKey: Key.sounds) }
 
