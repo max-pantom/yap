@@ -2,101 +2,107 @@ import Combine
 import ServiceManagement
 import SwiftUI
 
+/// Which Settings page is showing; shared so other screens (and yap://settings) can open a page directly.
+@MainActor
+final class SettingsNav: ObservableObject {
+    static let shared = SettingsNav()
+    @Published var page: SettingsView.Page = .dictation
+}
+
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
-    @Local private var page: Page = .shortcuts
+    @ObservedObject private var nav = SettingsNav.shared
 
     enum Page: String, CaseIterable, Identifiable {
-        case shortcuts = "Shortcuts", dictation = "Dictation", models = "Models", words = "Words", recording = "Recording",
-             permissions = "Permissions", general = "General"
+        case dictation = "Dictation", commands = "Voice Commands", words = "Words & Snippets", recording = "Recording",
+             iphone = "iPhone Mic", models = "AI Models", shortcuts = "Shortcuts", permissions = "Permissions", general = "General"
         var id: String { rawValue }
         var symbol: String {
             switch self {
-            case .shortcuts: "keyboard"
             case .dictation: "mic"
-            case .models: "cpu"
+            case .commands: "text.bubble"
             case .words: "character.book.closed"
             case .recording: "record.circle"
+            case .iphone: "iphone"
+            case .models: "cpu"
+            case .shortcuts: "keyboard"
             case .permissions: "lock.shield"
             case .general: "gearshape"
             }
+        }
+        /// "commands", "voice-commands", "Voice Commands" → .commands (for --settings and yap://settings?page=).
+        static func named(_ s: String) -> Page? {
+            let k = s.lowercased().filter(\.isLetter)
+            return allCases.first { String(describing: $0).lowercased() == k || $0.rawValue.lowercased().filter(\.isLetter) == k }
         }
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            List(Page.allCases, selection: Binding(get: { page }, set: { if let p = $0 { page = p } })) { p in
-                Label(p.rawValue, systemImage: p.symbol).tag(p)
+            List(selection: Binding(get: { nav.page }, set: { if let p = $0 { nav.page = p } })) {
+                Section { ForEach(Page.allCases.prefix(4)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
+                Section("More") { ForEach(Page.allCases.dropFirst(4).prefix(3)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
+                Section("Setup") { ForEach(Page.allCases.suffix(2)) { p in Label(p.rawValue, systemImage: p.symbol).tag(p) } }
             }
             .listStyle(.sidebar)
-            .frame(width: 170)
+            .frame(width: 190)
             Divider()
             Group {
-                switch page {
-                case .shortcuts: ShortcutsTab()
+                switch nav.page {
                 case .dictation: DictationTab()
-                case .models: ModelsTab()
+                case .commands: VoiceCommandsTab()
                 case .words: WordsTab()
                 case .recording: RecordingTab()
-                case .permissions: ScrollView { PermissionsView().padding(20) }
+                case .iphone: IPhoneTab(remote: RemoteMic.shared)
+                case .models: ModelsTab()
+                case .shortcuts: ShortcutsTab()
+                case .permissions:
+                    Form {
+                        SettingsHeader(page: .permissions, text: "What Yap needs from macOS, and why. Green means it's on.")
+                        Section { PermissionsView() }
+                    }.formStyle(.grouped)
                 case .general: GeneralTab()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 760, height: 560)
+        .frame(width: 780, height: 600)
     }
 }
 
-private struct GeneralTab: View {
-    @EnvironmentObject var model: AppModel
-    @AppStorage(Prefs.Key.sounds) var sounds = true
-    @AppStorage(Prefs.Key.showFlowBar) var showFlowBar = true
-    @AppStorage(Prefs.Key.startupAnimation) var startupAnimation = true
-    @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
-    @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
-
+/// The top of every page: its icon, name and one sentence on what it's for.
+struct SettingsHeader: View {
+    let page: SettingsView.Page
+    let text: String
     var body: some View {
-        Form {
-            Toggle("Play sounds", isOn: $sounds)
-            Toggle("Always show the Flow bar", isOn: $showFlowBar)
-                .onChange(of: showFlowBar) { _, _ in FlowBar.shared.update() }
-            Text("The little pill on your screen. Click it to dictate, drag it to move it. It grows into a waveform while you talk.")
-                .font(.caption).foregroundStyle(.secondary)
-            Button("Reset Flow bar position") { FlowBar.shared.resetPosition() }
-            Toggle("Play the mark animation when Yap starts", isOn: $startupAnimation)
-            if Updater.shared.isAvailable {
-                Toggle("Check for updates automatically", isOn: Binding(get: { Updater.shared.automaticallyChecks }, set: { Updater.shared.automaticallyChecks = $0 }))
-                Button("Check for Updates Now") { Updater.shared.checkForUpdates() }
-            }
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, on in
-                    do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
-                    catch { launchAtLogin = !on }
-                }
-            Section("Shortcuts & automation") {
-                Toggle("Allow yap:// links", isOn: $urlCommands)
-                Text("Lets Shortcuts, Raycast, Alfred, Stream Deck or scripts control Yap. In Shortcuts, use the “Open URLs” action. Browsers ask before opening a link.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if urlCommands {
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(URLCommands.reference, id: \.0) { url, what in
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(url).font(.caption.monospaced()).textSelection(.enabled).frame(width: 190, alignment: .leading)
-                                Text(what).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+        Section {
+            HStack(spacing: 14) {
+                Image(systemName: page.symbol)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(page.rawValue).font(.title3.weight(.semibold))
+                    Text(text).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Section("Privacy") {
-                Text("Everything runs on this Mac: speech recognition, AI cleanup, summaries. No account, no uploads, no analytics.")
-                    .foregroundStyle(.secondary)
-            }
+            .padding(.vertical, 4)
         }
-        .formStyle(.grouped)
     }
 }
+
+/// A link-style button that opens another Settings page.
+private struct GoTo: View {
+    let page: SettingsView.Page
+    var title: String? = nil
+    var body: some View {
+        Button(title ?? "Open \(page.rawValue)") { SettingsNav.shared.page = page }.buttonStyle(.link)
+    }
+}
+
+// MARK: - Dictation
 
 private struct DictationTab: View {
     @EnvironmentObject var model: AppModel
@@ -104,58 +110,88 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.locale) var locale = ""
     @AppStorage(Prefs.Key.keepOnClipboard) var keepOnClipboard = true
     @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
-    @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
     @AppStorage(Prefs.Key.translateTo) var translateTo = ""
     @AppStorage(Prefs.Key.fitToCursor) var fitToCursor = true
     @Local private var locales: [String] = []
 
+    private var currentStyle: CleanupStyle { CleanupStyle(rawValue: style) ?? .polished }
+
     var body: some View {
         Form {
-            LabeledContent("Dictation key", value: Shortcut.label(.dictate))
-            if Shortcut.get(.dictate)?.keyCode == 63 {
-                HStack {
-                    Text("Set “Press 🌐 key to” → “Do Nothing” so macOS doesn't open the emoji picker.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button("Open Keyboard Settings") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
-                    }.controlSize(.small)
+            SettingsHeader(page: .dictation, text: "Hold your key, talk, let go. Yap types what you said wherever your cursor is.")
+
+            Section("Basics") {
+                LabeledContent {
+                    HStack(spacing: 10) {
+                        Text(Shortcut.label(.dictate)).foregroundStyle(.secondary)
+                        GoTo(page: .shortcuts, title: "Change")
+                    }
+                } label: {
+                    Text("Dictation key")
+                    Text("Hold to talk. Double-tap for hands-free, press again to finish.")
+                }
+                if Shortcut.get(.dictate)?.keyCode == 63 {
+                    HStack {
+                        Text("Fn also opens the emoji picker. In Keyboard settings, set “Press 🌐 key to” to “Do Nothing”.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open Keyboard Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+                        }.controlSize(.small)
+                    }
+                }
+                MicPicker()
+                Picker(selection: $locale) {
+                    Text("Same as my Mac").tag("")
+                    ForEach(locales, id: \.self) { id in Text(Locale.current.localizedString(forIdentifier: id) ?? id).tag(id) }
+                } label: {
+                    Text("Language you speak")
+                }
+                .onChange(of: locale) { _, _ in model.dictation.boot() }
+            }
+
+            Section("What gets typed") {
+                Picker(selection: $style) {
+                    ForEach(CleanupStyle.allCases) { Text($0.label).tag($0.rawValue) }
+                } label: {
+                    Text("Clean-up")
+                    Text(currentStyle.detail)
+                }
+                if !Polisher.shared.modelAvailable && currentStyle != .verbatim {
+                    Label("No AI model is on, so only basic clean-up happens. Turn on Apple Intelligence, or pick a model.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                    GoTo(page: .models)
+                }
+                Toggle(isOn: $fitToCursor) {
+                    Text("Fit in with the text around the cursor")
+                    Text("Mid-sentence, Yap adds the space and keeps it lowercase. Names keep their capitals.")
+                }
+                Picker(selection: $translateTo) {
+                    Text("Off").tag("")
+                    ForEach(Array(Set(VoiceCommands.languages.values)).sorted(), id: \.self) { Text($0).tag($0) }
+                } label: {
+                    Text("Always translate to")
+                    Text("Talk in your language, type in this one. To translate just once, say “…translate to French”.")
+                }
+                Toggle(isOn: $keepOnClipboard) {
+                    Text("Also copy it to the clipboard")
+                    Text("If no text box was selected, press ⌘V to paste it yourself.")
                 }
             }
-            MicPicker()
-            Toggle("Keep dictation on the clipboard after pasting", isOn: $keepOnClipboard)
-            Text("When you stop talking, Yap pastes at your cursor. With this on, the text also stays on your clipboard, so it's never lost if no text field was focused.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Match the text around my cursor", isOn: $fitToCursor)
-            Text("Dictating mid-sentence adds the space and keeps it lowercase, and drops the period when more text follows. Names keep their capitals.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Learn from my corrections", isOn: $learnCorrections)
-            Text("Fix a word right after Yap pastes it (say “Jon” → “John”) and Yap adds it to your dictionary. It only reads the text field you just dictated into, for 45 seconds, on this Mac.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Voice commands", isOn: $voiceCommands)
-            Text("Say “scratch that” to drop the sentence before it, or on its own to remove your last dictation. End with “send it” or “press enter” to press Return after pasting. End with “translate to French” (any language) to paste the translation. Say “what's 40 plus 20” for the answer, or end a sum with “equals” to have it worked out. “New line” and “new paragraph” always work.")
-                .font(.caption).foregroundStyle(.secondary)
-            Picker("Always translate to", selection: $translateTo) {
-                Text("Off (keep my language)").tag("")
-                ForEach(Array(Set(VoiceCommands.languages.values)).sorted(), id: \.self) { Text($0).tag($0) }
-            }
-            Text("Talk in any language Yap understands and paste in this one. Uses your AI model (Settings → Models); quality varies by language.")
-                .font(.caption).foregroundStyle(.secondary)
-            Picker("Cleanup", selection: $style) {
-                ForEach(CleanupStyle.allCases) { Text($0.label).tag($0.rawValue) }
-            }
-            if !Polisher.shared.modelAvailable {
-                Text("No AI model is available (\(LLM.label)), so Yap uses rule-based cleanup and Command Mode is disabled. Pick one in Models.")
-                    .font(.caption).foregroundStyle(.orange)
-            }
-            Picker("Language", selection: $locale) {
-                Text("System (\(Locale.current.identifier))").tag("")
-                ForEach(locales, id: \.self) { id in
-                    Text(Locale.current.localizedString(forIdentifier: id) ?? id).tag(id)
+
+            Section("Learning") {
+                Toggle(isOn: $learnCorrections) {
+                    Text("Learn from my corrections")
+                    Text("Fix a word right after it's typed (Jon → John) and Yap spells it right next time.")
                 }
+                LabeledContent("Learned words and spellings") { GoTo(page: .words, title: "See list") }
             }
-            .onChange(of: locale) { _, _ in model.dictation.boot() }
-            LabeledContent("Speech model", value: model.dictation.engineStatus)
-            IPhoneMicSection(remote: RemoteMic.shared)
+
+            Section("Speech recognition") {
+                LabeledContent("Status", value: model.dictation.engineStatus)
+                LabeledContent("Engine") { GoTo(page: .models, title: "Change in AI Models") }
+            }
+
             Section { PracticeView(dictation: model.dictation) }
         }
         .formStyle(.grouped)
@@ -163,51 +199,74 @@ private struct DictationTab: View {
     }
 }
 
-private struct IPhoneMicSection: View {
-    @ObservedObject var remote: RemoteMic
-    @Local private var showingCode = false
-    @Local private var confirmUnpair = false
+// MARK: - Voice commands
+
+private struct VoiceCommandsTab: View {
+    @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
 
     var body: some View {
-        Section {
-            if let p = remote.pairing {
-                LabeledContent("Status") {
-                    switch remote.state {
-                    case .connected(let name): Label("\(name) connected", systemImage: "iphone.radiowaves.left.and.right").foregroundStyle(.green)
-                    case .waiting: Text("Waiting for your iPhone").foregroundStyle(.secondary)
-                    case .failed(let e): Text(e).foregroundStyle(.orange)
-                    case .off: Text("Off").foregroundStyle(.secondary)
-                    }
+        Form {
+            SettingsHeader(page: .commands, text: "Things you can say that do something instead of being typed.")
+            Section {
+                Toggle(isOn: $voiceCommands) {
+                    Text("Voice commands")
+                    Text("Off: every word is typed exactly as you say it.")
                 }
-                if showingCode, let img = RemoteMic.qrImage(for: p) {
-                    HStack(alignment: .top, spacing: 16) {
-                        Image(nsImage: img).interpolation(.none).padding(8).background(.white, in: RoundedRectangle(cornerRadius: 8))
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Scan with Yap Mic").font(.headline)
-                            Text("Open Yap Mic on your iPhone, tap Pair, and point it at this code. Keep it private: it's the key to this Mac's microphone link.")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Button("Done") { showingCode = false }
-                        }
-                    }
-                } else {
-                    HStack {
-                        Button("Show Pairing Code") { showingCode = true }
-                        Button("Unpair", role: .destructive) { confirmUnpair = true }
-                            .confirmationDialog("Unpair your iPhone?", isPresented: $confirmUnpair) {
-                                Button("Unpair", role: .destructive) { remote.unpair() }
-                            } message: { Text("Yap stops listening on your network. You can pair again any time.") }
-                    }
-                }
-            } else {
-                Button("Pair iPhone…") { _ = remote.pair(); showingCode = true }
             }
-        } header: {
-            Text("iPhone as microphone")
-        } footer: {
-            Text("With the Yap Mic app, hold the button on your phone and talk from anywhere in the room; the text pastes at your cursor here. Audio is encrypted with a key only your phone and this Mac have, and stays on your Wi-Fi. Build the app from Companion/ in the Yap repository.")
+            Group {
+                Section("Fix as you go") {
+                    CommandRow(say: "…scratch that…", does: "Removes the sentence you just said")
+                    CommandRow(say: "scratch that", note: "on its own", does: "Takes back your last dictation")
+                    CommandRow(say: "new line  ·  new paragraph", does: "Starts a new line or paragraph")
+                }
+                Section("Send") {
+                    CommandRow(say: "…send it", does: "Types the message, then presses Return")
+                    CommandRow(say: "…press enter", does: "Same as “send it”")
+                }
+                Section("Translate") {
+                    CommandRow(say: "…translate to French", does: "Types it in French. Works with about 40 languages")
+                    CommandRow(say: "Translate to Spanish: …", does: "Same, said at the start")
+                }
+                Section("Maths") {
+                    CommandRow(say: "what's 40 plus 20", does: "Types 60")
+                    CommandRow(say: "…40 plus 20 equals", does: "Types 40 + 20 = 60")
+                    CommandRow(say: "calculate 15 percent of 200", does: "Types 30")
+                }
+            }
+            .disabled(!voiceCommands)
+            .opacity(voiceCommands ? 1 : 0.5)
+            Section {
+                CommandRow(say: "make this friendlier", note: "with text selected", does: "Rewrites the selected text")
+                CommandRow(say: "write a thank-you note", note: "nothing selected", does: "Writes new text for you")
+            } header: {
+                Text("Command Mode")
+            } footer: {
+                Text("Hold \(Shortcut.label(.command) == "not set" ? "your dictation key + ⌃" : Shortcut.label(.command)) instead of the dictation key. Needs Apple Intelligence or another AI model.")
+            }
         }
+        .formStyle(.grouped)
     }
 }
+
+private struct CommandRow: View {
+    let say: String
+    var note: String? = nil
+    let does: String
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("“\(say)”").font(.body.weight(.medium))
+                if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
+            }
+            .frame(width: 240, alignment: .leading)
+            Text(does).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Words
 
 private struct WordsTab: View {
     @AppStorage(Prefs.Key.dictionary) var dictionary = ""
@@ -215,24 +274,27 @@ private struct WordsTab: View {
 
     var body: some View {
         Form {
+            SettingsHeader(page: .words, text: "Teach Yap your names and terms, and save phrases you say often.")
             Section {
                 TextEditor(text: $dictionary).font(.body.monospaced()).frame(height: 120)
             } header: {
                 Text("Dictionary")
             } footer: {
-                Text("One per line. A bare word (e.g. `Kubernetes`) teaches spelling. `heard => written` forces a replacement, e.g. `chat gpt => ChatGPT`.")
+                Text("One per line. `Kubernetes` teaches a spelling. `chat gpt => ChatGPT` always replaces what was heard. Words Yap learns from your corrections are added here.")
             }
             Section {
                 TextEditor(text: $snippets).font(.body.monospaced()).frame(height: 120)
             } header: {
                 Text("Snippets")
             } footer: {
-                Text("Say the trigger on its own to paste the expansion, e.g. `my calendar link => https://cal.com/me`. Use \\n for line breaks, and {date}, {time}, {day}, {year} or {clipboard} to fill them in.")
+                Text("Say the trigger on its own to type the text: `my link => https://cal.com/me`. Fill-ins: {date} {time} {day} {year} {clipboard}. Use \\n for a new line.")
             }
         }
         .formStyle(.grouped)
     }
 }
+
+// MARK: - Recording
 
 private struct RecordingTab: View {
     @AppStorage(Prefs.Key.recCamera) var camera = true
@@ -249,47 +311,213 @@ private struct RecordingTab: View {
 
     var body: some View {
         Form {
-            Section("Devices") {
+            SettingsHeader(page: .recording, text: "Press \(Shortcut.label(.record)) to record your screen. When you stop, the video is copied, ready to paste.")
+
+            Section("Camera and sound") {
+                Toggle(isOn: $camera) {
+                    Text("Show my camera")
+                    Text("A round bubble you can drag anywhere.")
+                }
                 CameraPicker { AppModel.shared.recorder.camera.useSelectedDevice() }
+                Button("Preview camera bubble") { AppModel.shared.recorder.camera.toggle() }
+                Toggle("Record my microphone", isOn: $mic)
                 MicPicker()
-                ContinuityHint()
-                Button("Preview Camera Bubble") { AppModel.shared.recorder.camera.toggle() }
+                Toggle(isOn: $systemAudio) {
+                    Text("Record sound from my Mac")
+                    Text("Audio from apps, like a video you play.")
+                }
+                DisclosureGroup("Use your iPhone as the camera") { ContinuityHint() }
             }
-            Toggle("Show camera bubble", isOn: $camera)
-            Toggle("Record microphone", isOn: $mic)
-            Toggle("Record system audio", isOn: $systemAudio)
-            Toggle("Highlight mouse clicks", isOn: $clicks)
-            Toggle("Show keyboard shortcuts on screen", isOn: $showKeystrokes)
-            Text("Shortcuts like ⌘K or ⌃⌥V appear at the bottom of full-screen recordings. Ordinary typing is never shown.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Auto-zoom on clicks", isOn: $autoZoom)
-            if autoZoom {
-                LabeledContent("Zoom") {
-                    Slider(value: $zoomLevel, in: 1.3...2.6, step: 0.1) { Text("Zoom") } minimumValueLabel: { Text("Subtle") } maximumValueLabel: { Text("Close") }
-                        .labelsHidden().frame(width: 260)
+
+            Section("While recording") {
+                Toggle(isOn: $countdown) {
+                    Text("Count down 3, 2, 1")
+                    Text("Time to get ready before it starts.")
+                }
+                Toggle(isOn: $clicks) {
+                    Text("Highlight clicks")
+                    Text("A ring appears where you click.")
+                }
+                Toggle(isOn: $showKeystrokes) {
+                    Text("Show keyboard shortcuts")
+                    Text("Shortcuts like ⌘K appear on screen. Ordinary typing never does.")
                 }
             }
-            Text("When you stop a full-screen recording, Yap smoothly zooms in where you click and follows your pointer, then eases back out. The original is kept: use Remove Zoom in the Library to get it back.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("3-second countdown", isOn: $countdown)
-            Toggle("Copy video to clipboard when done", isOn: $autoCopy)
-            Picker("Format", selection: $codec) {
-                Text("H.264 (plays everywhere)").tag("h264")
-                Text("HEVC (half the size)").tag("hevc")
-            }
-            Picker("Frame rate", selection: $fps) {
-                Text("30 fps").tag(30)
-                Text("60 fps").tag(60)
-            }
-            LabeledContent("Saved to") {
-                Button(Prefs.recordingsFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")) {
-                    try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
-                    NSWorkspace.shared.open(Prefs.recordingsFolder)
+
+            Section {
+                Toggle(isOn: $autoCopy) {
+                    Text("Copy the video when I stop")
+                    Text("Paste it straight into Slack, Mail or an issue.")
                 }
-                .buttonStyle(.link)
+                Toggle(isOn: $autoZoom) {
+                    Text("Zoom in where I click")
+                    Text("Smooth zooms on full-screen recordings. The original is kept.")
+                }
+                if autoZoom {
+                    LabeledContent("Zoom strength") {
+                        Slider(value: $zoomLevel, in: 1.3...2.6, step: 0.1) { Text("Zoom strength") } minimumValueLabel: { Text("Subtle") } maximumValueLabel: { Text("Close") }
+                            .labelsHidden().frame(width: 240)
+                    }
+                }
+            } header: {
+                Text("After recording")
+            } footer: {
+                Text("Every recording also gets a transcript, captions, a title, a summary and chapters, made on this Mac. Find them in the Library.")
             }
-            Text("No time limits. Recordings, captions (.srt) and AI notes are plain files you own.")
-                .font(.caption).foregroundStyle(.secondary)
+
+            Section("Video file") {
+                Picker("Format", selection: $codec) {
+                    Text("H.264, plays everywhere").tag("h264")
+                    Text("HEVC, half the size").tag("hevc")
+                }
+                Picker("Smoothness", selection: $fps) {
+                    Text("30 frames a second").tag(30)
+                    Text("60 frames a second").tag(60)
+                }
+                LabeledContent("Saved in") {
+                    Button(Prefs.recordingsFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")) {
+                        try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(Prefs.recordingsFolder)
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - iPhone
+
+private struct IPhoneTab: View {
+    @ObservedObject var remote: RemoteMic
+    @Local private var showingCode = false
+    @Local private var confirmUnpair = false
+
+    var body: some View {
+        Form {
+            SettingsHeader(page: .iphone, text: "Talk into your iPhone from anywhere in the room. The text appears at your cursor on this Mac.")
+            if let p = remote.pairing {
+                Section("Your iPhone") {
+                    LabeledContent("Status") {
+                        switch remote.state {
+                        case .connected(let name): Label("\(name) is connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        case .waiting: Text("Paired. Open Yap Mic on your iPhone to connect").foregroundStyle(.secondary)
+                        case .failed(let e): Text(e).foregroundStyle(.orange)
+                        case .off: Text("Off").foregroundStyle(.secondary)
+                        }
+                    }
+                    if showingCode { code(p) }
+                    HStack {
+                        Button(showingCode ? "Hide pairing code" : "Show pairing code") { showingCode.toggle() }
+                        Spacer()
+                        Button("Unpair", role: .destructive) { confirmUnpair = true }
+                            .confirmationDialog("Unpair your iPhone?", isPresented: $confirmUnpair) {
+                                Button("Unpair", role: .destructive) { remote.unpair() }
+                            } message: { Text("Yap stops listening for it. You can pair again any time.") }
+                    }
+                }
+            } else {
+                Section("Set up in three steps") {
+                    Label("Install Yap Mic on your iPhone (build it from the Companion folder in Yap's source).", systemImage: "1.circle")
+                    Label("Click Pair iPhone below. A code appears.", systemImage: "2.circle")
+                    Label("In Yap Mic, tap Pair and scan the code.", systemImage: "3.circle")
+                    Button("Pair iPhone") { _ = remote.pair(); showingCode = true }.buttonStyle(.borderedProminent)
+                }
+            }
+            Section("Privacy") {
+                Text("Your voice goes straight from the phone to this Mac over your Wi-Fi, encrypted with a key only the two of them share. Nothing goes through the internet.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    @ViewBuilder private func code(_ p: MicLink.Pairing) -> some View {
+        if let img = RemoteMic.qrImage(for: p) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(nsImage: img).interpolation(.none).padding(8).background(.white, in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityLabel("Pairing code")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Scan with Yap Mic").font(.headline)
+                    Text("In Yap Mic, tap Pair and point the camera here. Keep this code private: anyone with it can use this Mac's dictation.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - General
+
+private struct GeneralTab: View {
+    @EnvironmentObject var model: AppModel
+    @AppStorage(Prefs.Key.sounds) var sounds = true
+    @AppStorage(Prefs.Key.showFlowBar) var showFlowBar = true
+    @AppStorage(Prefs.Key.startupAnimation) var startupAnimation = true
+    @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
+    @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    var body: some View {
+        Form {
+            SettingsHeader(page: .general, text: "How Yap starts, sounds and shows itself.")
+
+            Section("Flow bar") {
+                Toggle(isOn: $showFlowBar) {
+                    Text("Always show the Flow bar")
+                    Text("The small pill at the bottom of your screen. Off: it only appears while you talk.")
+                }
+                .onChange(of: showFlowBar) { _, _ in FlowBar.shared.update() }
+                LabeledContent {
+                    Button("Move to bottom centre") { FlowBar.shared.resetPosition() }
+                } label: {
+                    Text("Position")
+                    Text("Drag the pill to move it anywhere.")
+                }
+            }
+
+            Section("Startup and sounds") {
+                Toggle("Open Yap when I log in", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, on in
+                        do { on ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
+                        catch { launchAtLogin = !on }
+                    }
+                Toggle("Play the logo animation at startup", isOn: $startupAnimation)
+                Toggle(isOn: $sounds) {
+                    Text("Play sounds")
+                    Text("A soft tone when Yap starts and stops listening.")
+                }
+            }
+
+            if Updater.shared.isAvailable {
+                Section("Updates") {
+                    Toggle("Check for updates automatically", isOn: Binding(get: { Updater.shared.automaticallyChecks }, set: { Updater.shared.automaticallyChecks = $0 }))
+                    Button("Check now") { Updater.shared.checkForUpdates() }
+                }
+            }
+
+            Section("Automation") {
+                Toggle(isOn: $urlCommands) {
+                    Text("Let other apps control Yap")
+                    Text("Shortcuts, Raycast, Stream Deck or scripts can open yap:// links. Browsers ask first.")
+                }
+                if urlCommands {
+                    DisclosureGroup("All links") {
+                        ForEach(URLCommands.reference, id: \.0) { url, what in
+                            LabeledContent {
+                                Text(what).foregroundStyle(.secondary)
+                            } label: {
+                                Text(url).font(.callout.monospaced()).textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Privacy") {
+                Text("Everything runs on this Mac: speech recognition, AI clean-up and summaries. No account, no uploads, no analytics.")
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -315,16 +543,23 @@ struct PermissionsView: View {
                 }
             }
             .id(tick)
-            HStack {
-                Text("Yap missing from a list in System Settings? Click + there and add Yap, or drag it in from Finder. Still off after allowing? Quit and reopen Yap.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("Show Yap in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
-                    .controlSize(.small)
-            }
-            HStack {
-                Text("Switch keeps turning itself off? Click Allow here. It clears Yap's old entry and asks again. Turn Yap on in the list that opens, then relaunch. Screen Recording always needs a relaunch.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("Relaunch Yap") { AppModel.relaunch() }.controlSize(.small)
+            DisclosureGroup("Having trouble?") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Yap not in a list in System Settings? Click + there and add Yap, or drag it in from Finder.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Show Yap in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Text("A switch keeps turning off? Click Allow above to reset it, turn Yap on again, then relaunch. Screen Recording always needs a relaunch.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Relaunch Yap") { AppModel.relaunch() }.controlSize(.small)
+                    }
+                }
+                .padding(.top, 6)
             }
         }
         .onReceive(timer) { _ in tick &+= 1 }

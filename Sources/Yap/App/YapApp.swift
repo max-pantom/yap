@@ -76,8 +76,9 @@ final class AppModel: ObservableObject {
 
         if let i = CommandLine.arguments.firstIndex(of: "--demo-bar"), i + 1 < CommandLine.arguments.count {
             dictation.demo(CommandLine.arguments[i + 1])
-        } else if CommandLine.arguments.contains("--settings") {
-            showSettings()
+        } else if let i = CommandLine.arguments.firstIndex(of: "--settings") {
+            let next = i + 1 < CommandLine.arguments.count ? CommandLine.arguments[i + 1] : ""
+            showSettings(page: SettingsView.Page.named(next))
         } else if !UserDefaults.standard.bool(forKey: Prefs.Key.onboarded) || !Permission.dictationReady {
             showOnboarding()
         }
@@ -105,8 +106,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func showSettings() {
-        show(id: "settings", title: "Yap Settings", size: NSSize(width: 760, height: 560), resizable: false) {
+    func showSettings(page: SettingsView.Page? = nil) {
+        if let page { SettingsNav.shared.page = page }
+        show(id: "settings", title: "Yap Settings", size: NSSize(width: 780, height: 600), resizable: false) {
             SettingsView().environmentObject(self)
         }
     }
@@ -171,14 +173,18 @@ struct MenuContent: View {
 
     var body: some View {
         MenuStatus(dictation: model.dictation, recorder: model.recorder)
+        Section("Dictation") {
+            MicPicker()
+            RecentDictations(history: model.history, dictation: model.dictation)
+            Button("Paste Last Dictation Again  (\(Shortcut.label(.pasteLast)))") { model.dictation.pasteLast() }
+        }
+        Section("Recording") {
+            RecordButtons(recorder: model.recorder)
+            Button((model.recorder.camera.isVisible ? "Hide Camera" : "Show Camera") + "  (\(Shortcut.label(.camera)))") { model.recorder.camera.toggle() }
+            CameraPicker { model.recorder.camera.useSelectedDevice() }
+        }
         Divider()
-        RecordButtons(recorder: model.recorder)
-        Button((model.recorder.camera.isVisible ? "Hide Camera Bubble" : "Show Camera Bubble") + "  (\(Shortcut.label(.camera)))") { model.recorder.camera.toggle() }
-        CameraPicker { model.recorder.camera.useSelectedDevice() }
-        MicPicker()
-        Divider()
-        RecentDictations(history: model.history, dictation: model.dictation)
-        Button("Open Library…") { model.showLibrary() }.keyboardShortcut("l")
+        Button("Library…") { model.showLibrary() }.keyboardShortcut("l")
         Button("Settings…") { model.showSettings() }.keyboardShortcut(",")
         if Updater.shared.isAvailable { Button("Check for Updates…") { Updater.shared.checkForUpdates() } }
         Divider()
@@ -193,10 +199,10 @@ private struct MenuStatus: View {
         if recorder.phase == .processing {
             Text(recorder.processingStatus.isEmpty ? "Processing recording…" : recorder.processingStatus)
         } else if !Permission.dictationReady {
-            Text("⚠︎ Permissions needed: open Settings")
+            Button("⚠︎ Yap needs a permission. Fix it…") { AppModel.shared.showSettings(page: .permissions) }
         } else {
-            Text("Hold \(Shortcut.label(.dictate)) to dictate · \(dictation.engineStatus)")
-            Text("Speech: \(WhisperEngine.shared.selectedVariant.map { "Whisper " + WhisperEngine.title(for: $0) } ?? "Apple") · AI: \(LLM.label)")
+            Text("Hold \(Shortcut.get(.dictate)?.display ?? "your key") to dictate")
+            Text("\(dictation.engineStatus) · \(WhisperEngine.shared.selectedVariant.map { "Whisper " + WhisperEngine.title(for: $0) } ?? "Apple Speech") · \(LLM.label)")
         }
     }
 }
@@ -209,7 +215,7 @@ private struct RecordButtons: View {
             Button("Discard Recording") { recorder.cancel() }
         } else {
             Button("Record Screen  (\(Shortcut.label(.record)))") { recorder.toggle() }
-            Button("Record Window or App…") { recorder.recordPicked() }
+            Button("Record a Window or App…") { recorder.recordPicked() }
         }
     }
 }

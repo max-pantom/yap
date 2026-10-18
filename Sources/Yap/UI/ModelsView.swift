@@ -4,6 +4,7 @@ import SwiftUI
 struct ModelsTab: View {
     var body: some View {
         Form {
+            SettingsHeader(page: .models, text: "What turns your voice into text, and what cleans it up. All on this Mac unless you add a server.")
             SpeechModelSection(whisper: WhisperEngine.shared)
             LanguageModelSection(ollama: OllamaManager.shared)
             TaskRoutingSection()
@@ -45,7 +46,7 @@ private struct SpeechModelSection: View {
         } header: {
             Text("Speech recognition")
         } footer: {
-            Text("Whisper runs fully on this Mac via Core ML. Apple Speech still shows the live preview while you talk; the chosen Whisper model writes the final text. Model names: huggingface.co/argmaxinc/whisperkit-coreml")
+            Text("Apple Speech is built in and instant. Whisper models are downloads that can be more accurate; they run on this Mac too, and you still see live words while you talk.")
         }
     }
 
@@ -83,17 +84,17 @@ private struct LanguageModelSection: View {
         Section {
             appleBody
         } header: {
-            Text("AI model 1 · Apple Intelligence")
+            Text("Built-in AI · Apple Intelligence")
         }
         Section {
-            Picker("Second model", selection: $provider) {
+            Picker("Extra model", selection: $provider) {
                 ForEach(LLMProvider.allCases) { Text($0.title).tag($0.rawValue) }
             }
             .onChange(of: provider) { _, _ in testResult = ""; Task { await ollama.refresh() } }
 
             switch LLMProvider(rawValue: provider) ?? .apple {
             case .apple:
-                Text("Add Ollama or any OpenAI-compatible server to run a bigger model alongside Apple's, then choose below which jobs it handles.")
+                Text("Optional. Add a bigger model (free with Ollama, or any OpenAI-compatible server), then choose below which jobs it does.")
                     .font(.caption).foregroundStyle(.secondary)
             case .ollama: ollamaBody
             case .openai: openaiBody
@@ -113,7 +114,7 @@ private struct LanguageModelSection: View {
             }
             if !testResult.isEmpty { Text(testResult).font(.callout).textSelection(.enabled) }
         } header: {
-            Text("AI model 2 · optional")
+            Text("Extra AI model")
         }
         .task { await ollama.refresh() }
     }
@@ -121,7 +122,7 @@ private struct LanguageModelSection: View {
     @ViewBuilder private var appleBody: some View {
         let available = SystemLanguageModel.default.isAvailable
         LabeledContent("Status", value: available ? "Ready · ~3B parameters, on-device, instant" : "Unavailable: turn on Apple Intelligence in System Settings")
-        Text("Built into macOS and always on. It's also the automatic fallback whenever the second model is slow or offline.")
+        Text("Built into macOS and always on. If the extra model is slow or offline, Apple takes over automatically.")
             .font(.caption).foregroundStyle(.secondary)
     }
 
@@ -205,7 +206,7 @@ private struct TaskRoutingSection: View {
             row(.command, $command, hasSecond)
             row(.summary, $summary, hasSecond)
             if hasSecond {
-                Button("Suggested: Apple for cleanup, second model for the rest") {
+                Button("Suggested: Apple for clean-up, extra model for the rest") {
                     cleanup = "apple"; command = "second"; summary = "second"
                 }
                 .buttonStyle(.link)

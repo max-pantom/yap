@@ -46,6 +46,7 @@ struct ShortcutsTab: View {
 
     var body: some View {
         Form {
+            SettingsHeader(page: .shortcuts, text: "The keys that start dictation and recording. Pick any key on any keyboard.")
             Section {
                 ForEach(Shortcut.Action.allCases) { ShortcutRow(action: $0) }
             } footer: {

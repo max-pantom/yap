@@ -38,7 +38,9 @@ enum URLCommands {
         let model = AppModel.shared
         switch command {
         case "library": model.showLibrary(); return
-        case "settings": model.showSettings(); return
+        case "settings":
+            let page = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "page" }?.value
+            model.showSettings(page: page.flatMap(SettingsView.Page.named)); return
         default: break
         }
         guard isEnabled else {

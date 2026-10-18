@@ -152,10 +152,19 @@ enum CleanupStyle: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .verbatim: "Verbatim (no AI)"
+        case .verbatim: "Verbatim"
         case .polished: "Polished"
         case .casual: "Casual"
         case .formal: "Formal"
+        }
+    }
+    /// One line on what the style does, shown under the picker.
+    var detail: String {
+        switch self {
+        case .verbatim: "Exactly what you said, with basic punctuation. No AI."
+        case .polished: "Removes ums and false starts, fixes punctuation. Keeps your words."
+        case .casual: "Relaxed, like a chat message."
+        case .formal: "Complete sentences in a professional tone."
         }
     }
 }
