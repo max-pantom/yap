@@ -106,6 +106,7 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
     @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
     @AppStorage(Prefs.Key.translateTo) var translateTo = ""
+    @AppStorage(Prefs.Key.fitToCursor) var fitToCursor = true
     @Local private var locales: [String] = []
 
     var body: some View {
@@ -123,6 +124,9 @@ private struct DictationTab: View {
             MicPicker()
             Toggle("Keep dictation on the clipboard after pasting", isOn: $keepOnClipboard)
             Text("When you stop talking, Yap pastes at your cursor. With this on, the text also stays on your clipboard, so it's never lost if no text field was focused.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle("Match the text around my cursor", isOn: $fitToCursor)
+            Text("Dictating mid-sentence adds the space and keeps it lowercase, and drops the period when more text follows. Names keep their capitals.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Learn from my corrections", isOn: $learnCorrections)
             Text("Fix a word right after Yap pastes it (say “Jon” → “John”) and Yap adds it to your dictionary. It only reads the text field you just dictated into, for 45 seconds, on this Mac.")
@@ -152,6 +156,7 @@ private struct DictationTab: View {
             .onChange(of: locale) { _, _ in model.dictation.boot() }
             LabeledContent("Speech model", value: model.dictation.engineStatus)
             IPhoneMicSection(remote: RemoteMic.shared)
+            Section { PracticeView(dictation: model.dictation) }
         }
         .formStyle(.grouped)
         .task { locales = await SpeechEngine.supportedLocales().map(\.identifier).sorted() }
@@ -222,7 +227,7 @@ private struct WordsTab: View {
             } header: {
                 Text("Snippets")
             } footer: {
-                Text("Say the trigger on its own to paste the expansion, e.g. `my calendar link => https://cal.com/me`. Use \\n for line breaks.")
+                Text("Say the trigger on its own to paste the expansion, e.g. `my calendar link => https://cal.com/me`. Use \\n for line breaks, and {date}, {time}, {day}, {year} or {clipboard} to fill them in.")
             }
         }
         .formStyle(.grouped)
@@ -240,6 +245,7 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.recFPS) var fps = 30
     @AppStorage(Prefs.Key.autoZoom) var autoZoom = true
     @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
+    @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
 
     var body: some View {
         Form {
@@ -253,6 +259,9 @@ private struct RecordingTab: View {
             Toggle("Record microphone", isOn: $mic)
             Toggle("Record system audio", isOn: $systemAudio)
             Toggle("Highlight mouse clicks", isOn: $clicks)
+            Toggle("Show keyboard shortcuts on screen", isOn: $showKeystrokes)
+            Text("Shortcuts like ⌘K or ⌃⌥V appear at the bottom of full-screen recordings. Ordinary typing is never shown.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Auto-zoom on clicks", isOn: $autoZoom)
             if autoZoom {
                 LabeledContent("Zoom") {
@@ -323,6 +332,7 @@ struct PermissionsView: View {
 }
 
 struct OnboardingView: View {
+    let dictation: DictationController
     var done: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -335,6 +345,8 @@ struct OnboardingView: View {
                 }
             }
             PermissionsView()
+            Divider()
+            PracticeView(dictation: dictation)
             Divider()
             VStack(alignment: .leading, spacing: 6) {
                 Label("Hold **\(Shortcut.label(.dictate))** and talk in any text field. Release to paste.", systemImage: "mic")
@@ -350,5 +362,51 @@ struct OnboardingView: View {
         }
         .padding(28)
         .frame(width: 600)
+    }
+}
+
+/// "Try it now": a text box that confirms the key, the microphone and the paste all work.
+struct PracticeView: View {
+    @ObservedObject var dictation: DictationController
+    @Local private var text = ""
+    @Local private var keyOK = false
+    @Local private var heardOK = false
+
+    private var pastedOK: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Try it now").font(.headline)
+            Text("Click in the box, hold **\(Shortcut.label(.dictate))**, say “Hello Yap, this is my first dictation”, then let go.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $text)
+                .font(.body)
+                .frame(height: 64)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityLabel("Practice text box")
+            HStack(spacing: 18) {
+                check("Key works", keyOK)
+                check("Heard you", heardOK)
+                check("Pasted", pastedOK)
+                Spacer()
+                if pastedOK { Button("Clear") { text = ""; keyOK = false; heardOK = false }.controlSize(.small) }
+            }
+            .font(.callout)
+            if keyOK && !heardOK && dictation.phase == .idle && !pastedOK {
+                Text("The key works but no words came through. Check the microphone under Yap → Microphone.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .onChange(of: dictation.phase) { _, p in if p == .listening || p == .locked { keyOK = true } }
+        .onChange(of: dictation.liveText) { _, t in if !t.isEmpty { heardOK = true } }
+        .onChange(of: text) { _, t in if !t.isEmpty { keyOK = true; heardOK = true } }
+    }
+
+    private func check(_ label: String, _ ok: Bool) -> some View {
+        Label(label, systemImage: ok ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(ok ? Color.green : Color.secondary)
+            .animation(Motion.enter, value: ok)
     }
 }

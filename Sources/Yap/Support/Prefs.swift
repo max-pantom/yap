@@ -36,6 +36,8 @@ enum Prefs {
         static let learnCorrections = "dictation.learnCorrections"
         static let voiceCommands = "dictation.voiceCommands"
         static let translateTo = "dictation.translateTo"    // "" = off, else a language name ("French")
+        static let fitToCursor = "dictation.fitToCursor"    // match spacing/capitals to the text around the cursor
+        static let showKeystrokes = "rec.showKeystrokes"
         static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
         static let autoZoom = "rec.autoZoom"
         static let zoomLevel = "rec.zoomLevel"
@@ -73,6 +75,8 @@ enum Prefs {
             Key.learnCorrections: true,
             Key.voiceCommands: true,
             Key.translateTo: "",
+            Key.fitToCursor: true,
+            Key.showKeystrokes: true,
             Key.urlCommands: true,
             Key.autoZoom: true,
             Key.zoomLevel: 1.8,
@@ -109,6 +113,20 @@ enum Prefs {
             }
         }
         return (reps, vocab)
+    }
+
+    /// Fills {date}, {time}, {day}, {year} and {clipboard} in a snippet.
+    static func expandVariables(_ s: String, now: Date = Date(), clipboard: String? = nil) -> String {
+        guard s.contains("{") else { return s }
+        let df = DateFormatter(); df.dateStyle = .long; df.timeStyle = .none
+        let tf = DateFormatter(); tf.dateStyle = .none; tf.timeStyle = .short
+        let day = DateFormatter(); day.setLocalizedDateFormatFromTemplate("EEEE")
+        let year = Calendar.current.component(.year, from: now)
+        return s.replacingOccurrences(of: "{date}", with: df.string(from: now))
+            .replacingOccurrences(of: "{time}", with: tf.string(from: now))
+            .replacingOccurrences(of: "{day}", with: day.string(from: now))
+            .replacingOccurrences(of: "{year}", with: String(year))
+            .replacingOccurrences(of: "{clipboard}", with: clipboard ?? "")
     }
 
     static var snippets: [String: String] {

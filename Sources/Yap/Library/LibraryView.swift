@@ -188,6 +188,11 @@ private struct RecordingDetail: View {
         }
         Button { player.pause(); blurring = true } label: { Label("Blur…", systemImage: "eye.slash") }
             .help("Hide emails, keys or names")
+        if let meta = recording.meta, !meta.segments.isEmpty {
+            Button { run("Burning in captions…", done: "Captioned copy saved") { _ = try await library.exportCaptioned(recording) } } label: {
+                Label("Captions", systemImage: "captions.bubble")
+            }.help("Save a copy with captions burned into the video, for Slack and social")
+        }
     }
 
     private var actions: some View {

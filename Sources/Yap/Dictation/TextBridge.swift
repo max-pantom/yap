@@ -123,3 +123,63 @@ enum TextBridge {
         pb.writeObjects(items)
     }
 }
+
+// MARK: - Fitting text to what's around the cursor
+
+/// Reads the characters on either side of the cursor (Accessibility) so dictation can join mid-sentence:
+/// a leading space after a word, lowercase after a comma, no stray period before more text.
+enum CursorContext {
+    struct Around { var before: Character?; var after: Character? }
+
+    @MainActor
+    static func read() -> Around? {
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.15)
+        var focused: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let ref = focused, CFGetTypeID(ref) == AXUIElementGetTypeID() else { return nil }
+        let el = ref as! AXUIElement
+        var sub: CFTypeRef?
+        AXUIElementCopyAttributeValue(el, kAXSubroleAttribute as CFString, &sub)
+        if (sub as? String) == (kAXSecureTextFieldSubrole as String) { return nil }
+        var rangeRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(el, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
+              let rv = rangeRef, CFGetTypeID(rv) == AXValueGetTypeID() else { return nil }
+        var sel = CFRange()
+        guard AXValueGetValue(rv as! AXValue, .cfRange, &sel), sel.location >= 0 else { return nil }
+        func char(at loc: Int) -> Character? {
+            guard loc >= 0 else { return nil }
+            var r = CFRange(location: loc, length: 1)
+            guard let param = AXValueCreate(.cfRange, &r) else { return nil }
+            var out: CFTypeRef?
+            guard AXUIElementCopyParameterizedAttributeValue(el, kAXStringForRangeParameterizedAttribute as CFString, param, &out) == .success,
+                  let s = out as? String else { return nil }
+            return s.first
+        }
+        return Around(before: char(at: sel.location - 1), after: char(at: sel.location + sel.length))
+    }
+
+    /// Adjusts `text` so it fits between `around.before` and `around.after`.
+    static func fit(_ text: String, _ around: Around, keepCapitalized: (String) -> Bool) -> String {
+        guard var t = Optional(text), let first = t.first else { return text }
+        if let b = around.before, !b.isWhitespace {
+            let sentenceEnd = ".!?".contains(b)
+            // Mid-sentence: "…and" + "Then we go" → "…and then we go".
+            if !sentenceEnd, first.isUppercase {
+                let word = String(t.prefix { $0.isLetter || $0 == "'" })
+                if word.count > 1, word.dropFirst().allSatisfy({ $0.isLowercase }), !keepCapitalized(word) {
+                    t = first.lowercased() + t.dropFirst()
+                }
+            }
+            if !(t.first.map { ",.;:!?)".contains($0) } ?? false) && !"([{\"'/-".contains(b) { t = " " + t }
+        } else if let b = around.before, b.isWhitespace || b.isNewline {
+            // fine as is
+        }
+        if let a = around.after, a.isLetter || a.isNumber {
+            // Inserting before more words: drop a closing period and keep them apart.
+            if t.hasSuffix("."), !t.hasSuffix("..") { t.removeLast() }
+            t += " "
+        }
+        return t
+    }
+}

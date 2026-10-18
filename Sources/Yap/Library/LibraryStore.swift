@@ -87,6 +87,20 @@ final class LibraryStore: ObservableObject {
         return out
     }
 
+    /// Saves a copy with the transcript burned in as captions, for places that ignore .srt files (Slack, social).
+    func exportCaptioned(_ r: Recording) async throws -> URL {
+        guard let meta = r.meta, !meta.segments.isEmpty else { throw YapError("This recording has no transcript to caption.") }
+        let out = uniqueURL(next: r.url, suffix: "captioned")
+        try await VideoEffects.render(r.url, to: out, zoom: nil, blurs: [], captions: Captions.phrases(from: meta.segments))
+        var m = meta
+        m.title += " (captioned)"
+        m.created = Date()
+        m.save(for: out)
+        try? RecordingProcessor.srt(m.segments).write(to: RecordingMeta.captions(for: out), atomically: true, encoding: .utf8)
+        reload(select: out)
+        return out
+    }
+
     private func uniqueURL(next video: URL, suffix: String) -> URL {
         let base = video.deletingPathExtension().lastPathComponent + " (\(suffix))"
         var out = video.deletingLastPathComponent().appendingPathComponent(base).appendingPathExtension("mp4")

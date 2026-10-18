@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import Combine
+import NaturalLanguage
 
 @MainActor
 final class DictationController: ObservableObject {
@@ -28,6 +29,9 @@ final class DictationController: ObservableObject {
     var isRemote: Bool { remoteFeed != nil }
     /// What was pasted last (shown on the iPhone).
     private(set) var lastOutput: String?
+    /// Loudest level heard this session, for the "can't hear you" check.
+    private var peakLevel: Float = 0
+    private var silenceCheck: Task<Void, Never>?
     /// The last paste, so "scratch that" can take it back.
     private var lastDelivery: (app: pid_t, at: Date)?
 
@@ -132,6 +136,7 @@ final class DictationController: ObservableObject {
             return
         }
         Log.write("listening (command=\(command)) app=\(targetApp?.localizedName ?? "?")")
+        watchForSilence()
         Sounds.start()
         FlowBar.shared.update()
         if command {
@@ -263,6 +268,10 @@ final class DictationController: ObservableObject {
             app.activate()
             try? await Task.sleep(for: .milliseconds(120))
         }
+        // Join the surrounding text: a space after a word, lowercase mid-sentence, no stray period.
+        if !isCommand, UserDefaults.standard.bool(forKey: Prefs.Key.fitToCursor), let around = CursorContext.read() {
+            output = CursorContext.fit(output, around, keepCapitalized: Self.isProperNoun)
+        }
         let result = TextBridge.deliver(output)
         lastOutput = output
         if result != .copiedOnly {
@@ -287,6 +296,40 @@ final class DictationController: ObservableObject {
         }
     }
 
+    /// The paste-last shortcut: puts the last dictation at the cursor again.
+    func pasteLast() {
+        guard phase == .idle else { return }
+        guard let text = lastOutput ?? history.entries.first?.text else {
+            show("Nothing dictated yet", symbol: "text.bubble", error: false)
+            return
+        }
+        TextBridge.deliver(text)
+    }
+
+    /// Names, places and your dictionary words keep their capital letter mid-sentence.
+    private static func isProperNoun(_ word: String) -> Bool {
+        if word == "I" || word.hasPrefix("I'") { return true }
+        if Prefs.dictionary.vocabulary.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) { return true }
+        let tagger = NLTagger(tagSchemes: [.nameType])
+        tagger.string = word + " said hello."
+        let (tag, _) = tagger.tag(at: tagger.string!.startIndex, unit: .word, scheme: .nameType)
+        return tag == .personalName || tag == .placeName || tag == .organizationName
+    }
+
+    /// After 2.5 s of near silence, say so while still listening (wrong or muted microphone).
+    private func watchForSilence() {
+        peakLevel = 0
+        silenceCheck?.cancel()
+        silenceCheck = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard let self, !Task.isCancelled, self.phase == .listening || self.phase == .locked, !self.isRemote,
+                  self.peakLevel < 0.12, self.liveText.isEmpty else { return }
+            let mic = Devices.shared.microphones.first { $0.id == Devices.selectedMicID }?.name ?? "the default microphone"
+            Log.write("no input heard after 2.5s on \(mic)")
+            self.show("Can't hear you. Using \(mic): check it's not muted, or pick another in the menu", symbol: "mic.badge.xmark", error: false, seconds: 4)
+        }
+    }
+
     /// "Scratch that" on its own: undo the last paste in the app it went to.
     private func undoLastDictation() async {
         reset()
@@ -304,9 +347,13 @@ final class DictationController: ObservableObject {
     func reinsert(_ text: String) { TextBridge.insert(text) }
 
     /// Feeds the Flow bar's 60 fps waveform without republishing the controller on every audio buffer.
-    private func push(level: Float) { FlowBar.shared.meter.level = level }
+    private func push(level: Float) {
+        FlowBar.shared.meter.level = level
+        if level > peakLevel { peakLevel = level }
+    }
 
     private func reset() {
+        silenceCheck?.cancel()
         remoteFeed = nil
         phase = .idle
         isCommand = false

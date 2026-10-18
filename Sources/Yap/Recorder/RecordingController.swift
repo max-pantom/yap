@@ -13,6 +13,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
     let camera = CameraBubble()
     private var recorder: ScreenRecorder?
     private let clicks = ClickTracker()
+    private let keystrokes = KeystrokeOverlay()
     private var trackedScreen: CGRect?
     private var cameraWasVisible = false
     private let library: LibraryStore
@@ -45,9 +46,16 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
             guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else {
                 throw YapError("No display found.")
             }
-            // Hide all of Yap's own UI from the video except the camera bubble.
+            // Hide all of Yap's own UI from the video except the camera bubble and the keystroke overlay.
             let me = content.applications.filter { $0.processID == getpid() }
-            let bubble = content.windows.filter { w in camera.windowNumber.map { CGWindowID($0) == w.windowID } ?? false }
+            var shown = Set<CGWindowID>()
+            if let n = camera.windowNumber { shown.insert(CGWindowID(n)) }
+            let overlayID = keystrokes.prepare(on: screen)
+            if let overlayID { shown.insert(overlayID) }
+            // The overlay was just ordered in, so look again if the first list predates it.
+            let windows = overlayID.map { id in content.windows.contains { $0.windowID == id } } == false
+                ? (try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)).windows : content.windows
+            let bubble = windows.filter { shown.contains($0.windowID) }
             let filter = SCContentFilter(display: display, excludingApplications: me, exceptingWindows: bubble)
             await begin(with: filter, screen: screen?.frame)
         } catch {
@@ -89,7 +97,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         if UserDefaults.standard.bool(forKey: Prefs.Key.recCountdown) {
             phase = .countdown
             let ok = await Countdown.run(seconds: 3)
-            guard ok else { phase = .idle; camera.hideIfWeShowedIt(cameraWasVisible); return }
+            guard ok else { phase = .idle; keystrokes.stop(); camera.hideIfWeShowedIt(cameraWasVisible); return }
         }
         let d = UserDefaults.standard
         let options = ScreenRecorder.Options(
@@ -121,7 +129,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         self.recorder = recorder
         startedAt = Date()
         trackedScreen = screen
-        if let screen { clicks.start(screen: screen) }
+        if let screen { clicks.start(screen: screen); keystrokes.start() }
         phase = .recording
         ControlBar.shared.show(for: self)
     }
@@ -135,6 +143,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         processingStatus = "Finishing video…"
         let url: URL?
         let clickLog = trackedScreen != nil ? clicks.stop() : nil
+        keystrokes.stop()
         trackedScreen = nil
         do { url = try await recorder.stop() } catch { fail(error); return }
         self.recorder = nil
@@ -176,6 +185,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         guard phase == .recording, let recorder else { return }
         ControlBar.shared.hide()
         clicks.stop(); trackedScreen = nil
+        keystrokes.stop()
         Task {
             let url = try? await recorder.stop()
             if let url { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
@@ -204,6 +214,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
     private func fail(_ error: Error) {
         ControlBar.shared.hide()
         clicks.stop(); trackedScreen = nil
+        keystrokes.stop()
         recorder = nil
         startedAt = nil
         phase = .idle

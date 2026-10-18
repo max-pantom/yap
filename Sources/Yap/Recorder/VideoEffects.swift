@@ -140,8 +140,9 @@ struct BlurRegion: Codable, Hashable, Identifiable, Sendable {
 
 enum VideoEffects {
     /// Re-encodes `source` into `output` with blurred regions (in source coordinates) and then the zoom path.
-    static func render(_ source: URL, to output: URL, zoom: ZoomPlan?, blurs: [BlurRegion]) async throws {
+    static func render(_ source: URL, to output: URL, zoom: ZoomPlan?, blurs: [BlurRegion], captions: [Caption] = []) async throws {
         let asset = AVURLAsset(url: source)
+        let painter = captions.isEmpty ? nil : CaptionPainter(captions)
         let composition = try await AVVideoComposition.videoComposition(with: asset) { request in
             var image = request.sourceImage.clampedToExtent()
             let extent = request.sourceImage.extent
@@ -163,7 +164,10 @@ enum VideoEffects {
                 image = image.samplingLinear()
                     .transformed(by: CGAffineTransform(translationX: -ox, y: -oy).concatenating(CGAffineTransform(scaleX: s.z, y: s.z)))
             }
-            request.finish(with: image.cropped(to: extent), context: nil)
+            image = image.cropped(to: extent)
+            // Captions go on last, over the zoom, so they stay the same size and place.
+            if let caption = painter?.image(at: t, in: extent) { image = caption.composited(over: image) }
+            request.finish(with: image, context: nil)
         }
         let hevc = UserDefaults.standard.string(forKey: Prefs.Key.recCodec) == "hevc"
         guard let export = AVAssetExportSession(asset: asset, presetName: hevc ? AVAssetExportPresetHEVCHighestQuality : AVAssetExportPresetHighestQuality) else {
@@ -196,5 +200,74 @@ enum VideoEffects {
         guard fm.fileExists(atPath: original.path) else { return }
         try fm.trashItem(at: video, resultingItemURL: nil)
         try fm.moveItem(at: original, to: video)
+    }
+}
+
+// MARK: - Burned-in captions
+
+/// One line of on-screen text, in source time.
+struct Caption: Sendable, Equatable { var start: Double; var end: Double; var text: String }
+
+enum Captions {
+    /// Splits transcript segments into short phrases (about 9 words), timed in proportion to their length.
+    static func phrases(from segments: [SpeechEngine.Segment], maxWords: Int = 9) -> [Caption] {
+        var out: [Caption] = []
+        for s in segments {
+            let words = s.text.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard !words.isEmpty else { continue }
+            let chunks = stride(from: 0, to: words.count, by: maxWords).map { Array(words[$0..<min($0 + maxWords, words.count)]) }
+            let total = Double(words.count), span = max(0.5, s.end - s.start)
+            var t = s.start
+            for c in chunks {
+                let d = span * Double(c.count) / total
+                out.append(Caption(start: t, end: t + d, text: c.joined(separator: " ")))
+                t += d
+            }
+        }
+        return out
+    }
+}
+
+/// Draws caption images on demand and keeps the current one, so each phrase is rendered once.
+final class CaptionPainter: @unchecked Sendable {
+    private let captions: [Caption]
+    private let lock = NSLock()
+    private var cached: (index: Int, width: CGFloat, image: CIImage)?
+
+    init(_ captions: [Caption]) { self.captions = captions.sorted { $0.start < $1.start } }
+
+    /// The caption image for time `t`, already positioned in a frame of `extent`.
+    func image(at t: Double, in extent: CGRect) -> CIImage? {
+        guard let i = captions.firstIndex(where: { t >= $0.start && t < $0.end }) else { return nil }
+        lock.lock(); defer { lock.unlock() }
+        if let c = cached, c.index == i, c.width == extent.width { return c.image }
+        guard let img = Self.draw(captions[i].text, frameWidth: extent.width, frameHeight: extent.height) else { return nil }
+        let x = extent.minX + (extent.width - img.extent.width) / 2, y = extent.minY + extent.height * 0.06
+        let placed = img.transformed(by: CGAffineTransform(translationX: x, y: y))
+        cached = (i, extent.width, placed)
+        return placed
+    }
+
+    /// White semibold text on a soft dark pill, sized to the video.
+    private static func draw(_ text: String, frameWidth: CGFloat, frameHeight: CGFloat) -> CIImage? {
+        let fontSize = max(16, min(frameWidth, frameHeight * 16 / 9) * 0.026)
+        let style = NSMutableParagraphStyle(); style.alignment = .center; style.lineBreakMode = .byWordWrapping
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+                                                     .foregroundColor: NSColor.white, .paragraphStyle: style]
+        let s = NSAttributedString(string: text, attributes: attrs)
+        let maxW = frameWidth * 0.8
+        let bounds = s.boundingRect(with: CGSize(width: maxW, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading])
+        let padX = fontSize * 0.7, padY = fontSize * 0.4
+        let w = Int(ceil(bounds.width + padX * 2)), h = Int(ceil(bounds.height + padY * 2))
+        guard w > 0, h > 0, let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let pill = CGPath(roundedRect: CGRect(x: 0, y: 0, width: w, height: h), cornerWidth: fontSize * 0.5, cornerHeight: fontSize * 0.5, transform: nil)
+        ctx.addPath(pill); ctx.setFillColor(CGColor(gray: 0, alpha: 0.72)); ctx.fillPath()
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        s.draw(with: CGRect(x: padX, y: padY, width: bounds.width, height: bounds.height), options: [.usesLineFragmentOrigin, .usesFontLeading])
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage().map { CIImage(cgImage: $0) }
     }
 }

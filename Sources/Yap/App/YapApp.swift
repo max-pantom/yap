@@ -91,6 +91,9 @@ final class AppModel: ObservableObject {
         if let s = Shortcut.get(.camera) {
             hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.recorder.camera.toggle() }
         }
+        if let s = Shortcut.get(.pasteLast) {
+            hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.dictation.pasteLast() }
+        }
     }
 
     // MARK: Windows (AppKit-hosted so they can be opened from hotkeys and the menu alike)
@@ -109,8 +112,8 @@ final class AppModel: ObservableObject {
     }
 
     func showOnboarding() {
-        show(id: "onboarding", title: "Welcome to Yap", size: NSSize(width: 600, height: 600), resizable: false) {
-            OnboardingView { [weak self] in
+        show(id: "onboarding", title: "Welcome to Yap", size: NSSize(width: 600, height: 800), resizable: false) {
+            OnboardingView(dictation: dictation) { [weak self] in
                 UserDefaults.standard.set(true, forKey: Prefs.Key.onboarded)
                 self?.windows["onboarding"]?.close()
                 self?.dictation.hotkeys.start()

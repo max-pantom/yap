@@ -129,7 +129,7 @@ struct Shortcut: Codable, Equatable {
     // MARK: Storage
 
     enum Action: String, CaseIterable, Identifiable {
-        case dictate, command, record, camera
+        case dictate, command, record, camera, pasteLast
         var id: String { rawValue }
 
         var title: String {
@@ -138,6 +138,7 @@ struct Shortcut: Codable, Equatable {
             case .command: "Command Mode (hold)"
             case .record: "Start / stop screen recording"
             case .camera: "Show / hide camera bubble"
+            case .pasteLast: "Paste your last dictation again"
             }
         }
 
@@ -150,6 +151,7 @@ struct Shortcut: Codable, Equatable {
             case .command: nil  // falls back to "dictate key + ⌃"
             case .record: Shortcut(keyCode: UInt16(kVK_ANSI_R), modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue, isModifierOnly: false)
             case .camera: Shortcut(keyCode: UInt16(kVK_ANSI_C), modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue, isModifierOnly: false)
+            case .pasteLast: Shortcut(keyCode: UInt16(kVK_ANSI_V), modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, isModifierOnly: false)
             }
         }
 

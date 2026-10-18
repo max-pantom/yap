@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import FoundationModels
 
 /// Turns raw speech into finished text. Each job (cleanup, Command Mode, summaries) runs on the model chosen
@@ -28,7 +29,10 @@ actor Polisher {
 
     func clean(_ raw: String, app: String?) async -> String {
         // Snippets match on the raw words, before anything else touches them.
-        if let expansion = Prefs.snippets[Prefs.normalizeForMatch(raw)] { return expansion }
+        if let expansion = Prefs.snippets[Prefs.normalizeForMatch(raw)] {
+            let clip = expansion.contains("{clipboard}") ? await MainActor.run { NSPasteboard.general.string(forType: .string) } : nil
+            return Prefs.expandVariables(expansion, clipboard: clip)
+        }
 
         let style = Prefs.style
         let dict = Prefs.dictionary
