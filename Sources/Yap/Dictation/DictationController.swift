@@ -253,7 +253,7 @@ final class DictationController: ObservableObject {
             output = await Polisher.shared.clean(raw, app: appName)
             // "…translate to French", or Settings → Dictation → Always translate to.
             let saved = UserDefaults.standard.string(forKey: Prefs.Key.translateTo) ?? ""
-            if Prefs.translateOn, let language = commands.translateTo ?? (saved.isEmpty ? nil : saved) {
+            if let language = commands.translateTo ?? (saved.isEmpty ? nil : saved) {
                 guard let translated = await Polisher.shared.translate(output, to: language, app: appName), !translated.isEmpty else {
                     fail("Translation needs Apple Intelligence or a second model (Settings → Models)")
                     return

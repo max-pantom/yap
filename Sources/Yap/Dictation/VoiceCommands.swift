@@ -63,7 +63,7 @@ enum VoiceCommands {
 
         // "…translate to French" at the end, or "Translate to French: …" at the start.
         var translateTo: String?
-        for pattern in [translateTail, translateHead] where Prefs.translateOn {
+        for pattern in [translateTail, translateHead] {
             if let m = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                let r = Range(m.range, in: text), let lr = Range(m.range(at: 1), in: text) {
                 translateTo = languages[text[lr].lowercased()]

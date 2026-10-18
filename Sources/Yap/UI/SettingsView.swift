@@ -115,7 +115,6 @@ private struct DictationTab: View {
     @AppStorage(Prefs.Key.learnCorrections) var learnCorrections = true
     @AppStorage(Prefs.Key.translateTo) var translateTo = ""
     @AppStorage(Prefs.Key.fitToCursor) var fitToCursor = true
-    @AppStorage(Prefs.Key.labsTranslate) var translateOn = false
     @Local private var locales: [String] = []
 
     private var currentStyle: CleanupStyle { CleanupStyle(rawValue: style) ?? .polished }
@@ -170,13 +169,13 @@ private struct DictationTab: View {
                     Text("Fit in with the text around the cursor")
                     Text("Mid-sentence, Yap adds the space and keeps it lowercase. Names keep their capitals.")
                 }
-                if translateOn { Picker(selection: $translateTo) {
+                Picker(selection: $translateTo) {
                     Text("Off").tag("")
                     ForEach(Array(Set(VoiceCommands.languages.values)).sorted(), id: \.self) { Text($0).tag($0) }
                 } label: {
                     Text("Always translate to")
                     Text("Talk in your language, type in this one. To translate just once, say “…translate to French”.")
-                } }
+                }
                 Toggle(isOn: $keepOnClipboard) {
                     Text("Also copy it to the clipboard")
                     Text("If no text box was selected, press ⌘V to paste it yourself.")
@@ -207,7 +206,6 @@ private struct DictationTab: View {
 
 private struct VoiceCommandsTab: View {
     @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
-    @AppStorage(Prefs.Key.labsTranslate) var translateOn = false
 
     var body: some View {
         Form {
@@ -228,10 +226,10 @@ private struct VoiceCommandsTab: View {
                     CommandRow(say: "…send it", does: "Types the message, then presses Return")
                     CommandRow(say: "…press enter", does: "Same as “send it”")
                 }
-                if translateOn { Section("Translate") {
+                Section("Translate") {
                     CommandRow(say: "…translate to French", does: "Types it in French. Works with about 40 languages")
                     CommandRow(say: "Translate to Spanish: …", does: "Same, said at the start")
-                } }
+                }
                 Section("Maths") {
                     CommandRow(say: "what's 40 plus 20", does: "Types 60")
                     CommandRow(say: "…40 plus 20 equals", does: "Types 40 + 20 = 60")
@@ -463,7 +461,6 @@ private struct GeneralTab: View {
     @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
     @AppStorage(Prefs.Key.showExperimental) var showExperimental = false
     @AppStorage(Prefs.Key.labsIPhoneMic) var iPhoneMic = false
-    @AppStorage(Prefs.Key.labsTranslate) var translate = false
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -538,15 +535,11 @@ private struct GeneralTab: View {
                         Text("Use your iPhone as a wireless microphone. Needs the Yap Mic app. Adds an iPhone Mic page.")
                     }
                     .onChange(of: iPhoneMic) { _, _ in RemoteMic.shared.refresh() }
-                    Toggle(isOn: $translate) {
-                        Label("Translate", systemImage: "globe")
-                        Text("Say “…translate to French” or pick a language to always type in. Quality depends on your AI model.")
-                    }
                 }
             } header: {
                 Text("Experimental")
             } footer: {
-                if showExperimental && (iPhoneMic || translate) {
+                if showExperimental && iPhoneMic {
                     Text("Turning off the list hides it but keeps what's switched on.")
                 }
             }
