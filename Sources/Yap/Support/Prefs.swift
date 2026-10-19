@@ -40,6 +40,7 @@ enum Prefs {
         static let showKeystrokes = "rec.showKeystrokes"
         static let showExperimental = "labs.visible"       // the Experimental list in General
         static let labsIPhoneMic = "labs.iphoneMic"
+        static let labsNewSettings = "labs.newSettings"     // toolbar-style Settings window; off = the sidebar design
         static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
         static let autoZoom = "rec.autoZoom"
         static let zoomLevel = "rec.zoomLevel"
@@ -81,6 +82,7 @@ enum Prefs {
             Key.showKeystrokes: true,
             Key.showExperimental: false,
             Key.labsIPhoneMic: false,
+            Key.labsNewSettings: true,
             Key.urlCommands: true,
             Key.autoZoom: true,
             Key.zoomLevel: 1.8,
@@ -90,6 +92,8 @@ enum Prefs {
     static var d: UserDefaults { .standard }
     /// Experimental features: off and out of sight until turned on in General → Experimental.
     static var iPhoneMicOn: Bool { d.bool(forKey: Key.labsIPhoneMic) }
+    /// The one experiment that starts on: the new Settings design. Off brings back the sidebar.
+    static var newSettingsOn: Bool { d.bool(forKey: Key.labsNewSettings) }
     static var style: CleanupStyle { CleanupStyle(rawValue: d.string(forKey: Key.cleanupStyle) ?? "") ?? .polished }
     static var sounds: Bool { d.bool(forKey: Key.sounds) }
 

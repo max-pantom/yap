@@ -44,6 +44,9 @@ final class AppModel: ObservableObject {
     private var hotKeys = GlobalHotKeys()
     private var observers: [Any] = []
 
+    /// Defaults first: a yap:// link that launches Yap arrives before applicationDidFinishLaunching.
+    private init() { Prefs.registerDefaults() }
+
     func boot() {
         Prefs.registerDefaults()
         Updater.shared.start()
@@ -108,9 +111,29 @@ final class AppModel: ObservableObject {
 
     func showSettings(page: SettingsView.Page? = nil) {
         if let page { SettingsNav.shared.page = page }
-        show(id: "settings", title: "Yap Settings", size: NSSize(width: 780, height: 600), resizable: false) {
-            SettingsView().environmentObject(self)
+        // The two designs are different windows; drop the open one if the experiment was switched.
+        if let w = windows["settings"], (w.contentViewController is ToolbarSettingsController) != Prefs.newSettingsOn {
+            windows["settings"] = nil
+            w.close()
         }
+        if Prefs.newSettingsOn {
+            present(id: "settings") {
+                let w = NSWindow(contentViewController: ToolbarSettingsController())
+                w.styleMask = [.titled, .closable, .miniaturizable]
+                w.toolbarStyle = .preference
+                w.center()
+                return w
+            }
+        } else {
+            show(id: "settings", title: "Yap Settings", size: NSSize(width: 780, height: 600), resizable: false) {
+                SettingsView().environmentObject(self)
+            }
+        }
+    }
+
+    /// Swaps the Settings window for the other design, keeping the page.
+    func reopenSettings() {
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.showSettings(page: .general) } }
     }
 
     func showOnboarding() {
@@ -124,12 +147,11 @@ final class AppModel: ObservableObject {
     }
 
     private func show<V: View>(id: String, title: String, size: NSSize, resizable: Bool, @ViewBuilder content: () -> V) {
-        let window = windows[id] ?? {
+        present(id: id) {
             var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
             if resizable { style.insert(.resizable); style.insert(.fullSizeContentView) }
             let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: style, backing: .buffered, defer: false)
             w.title = title
-            w.isReleasedWhenClosed = false
             w.contentViewController = NSHostingController(rootView: content())
             w.setContentSize(size)
             w.center()
@@ -140,6 +162,14 @@ final class AppModel: ObservableObject {
                     w.setFrameOrigin(NSPoint(x: f.minX + 24, y: f.maxY - w.frame.height - 24))
                 }
             }
+            return w
+        }
+    }
+
+    private func present(id: String, make: () -> NSWindow) {
+        let window = windows[id] ?? {
+            let w = make()
+            w.isReleasedWhenClosed = false
             observers.append(NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
                 DispatchQueue.main.async { MainActor.assumeIsolated { AppModel.shared.updateActivationPolicy() } }
             })

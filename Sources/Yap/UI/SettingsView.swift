@@ -77,7 +77,11 @@ struct SettingsView: View {
 struct SettingsHeader: View {
     let page: SettingsView.Page
     let text: String
+    @Environment(\.settingsHeaderHidden) private var hidden
     var body: some View {
+        if !hidden { header }
+    }
+    private var header: some View {
         Section {
             HStack(spacing: 14) {
                 Image(systemName: page.symbol)
@@ -96,8 +100,13 @@ struct SettingsHeader: View {
     }
 }
 
+extension EnvironmentValues {
+    /// The toolbar design names the page in the window title, so pages it borrows drop their header.
+    @Entry var settingsHeaderHidden = false
+}
+
 /// A link-style button that opens another Settings page.
-private struct GoTo: View {
+struct GoTo: View {
     let page: SettingsView.Page
     var title: String? = nil
     var body: some View {
@@ -204,7 +213,7 @@ private struct DictationTab: View {
 
 // MARK: - Voice commands
 
-private struct VoiceCommandsTab: View {
+struct VoiceCommandsTab: View {
     @AppStorage(Prefs.Key.voiceCommands) var voiceCommands = true
 
     var body: some View {
@@ -392,7 +401,7 @@ private struct RecordingTab: View {
 
 // MARK: - iPhone
 
-private struct IPhoneTab: View {
+struct IPhoneTab: View {
     @ObservedObject var remote: RemoteMic
     @Local private var showingCode = false
     @Local private var confirmUnpair = false
@@ -461,6 +470,7 @@ private struct GeneralTab: View {
     @AppStorage(Prefs.Key.urlCommands) var urlCommands = true
     @AppStorage(Prefs.Key.showExperimental) var showExperimental = false
     @AppStorage(Prefs.Key.labsIPhoneMic) var iPhoneMic = false
+    @AppStorage(Prefs.Key.labsNewSettings) var newSettings = true
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -525,8 +535,13 @@ private struct GeneralTab: View {
             }
 
             Section {
+                Toggle(isOn: $newSettings) {
+                    Text("New Settings design")
+                    Text("Tabs along the top, like Apple's own apps. Off: this sidebar layout.")
+                }
+                .onChange(of: newSettings) { _, _ in AppModel.shared.reopenSettings() }
                 Toggle(isOn: $showExperimental) {
-                    Text("Show experimental features")
+                    Text("Show more experimental features")
                     Text("Early features that may change, or not always work yet.")
                 }
                 if showExperimental {
