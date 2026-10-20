@@ -37,7 +37,11 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - **Command Mode:** select text, hold your Command Mode key, and say "make this friendlier". With nothing selected it writes new text.
 - **Learns from your corrections.** Fix a word right after it's pasted ("Jon" → "John") and Yap adds it to your dictionary.
 - **Voice commands:** "scratch that" drops the sentence before it, or on its own removes your last dictation. End with "send it" or "press enter" to send the message.
-- **Dictionary and snippets:** teach spellings (`chat gpt => ChatGPT`) and voice shortcuts (`my calendar link => https://…`).
+- **Translate as you talk.** End with "…translate to French", or set "Always translate to" in Settings. About 40 languages.
+- **Spoken maths:** "what's 40 plus 20" types 60; "15 percent of 200" types 30.
+- **Fits in with the text around your cursor:** mid-sentence it adds the space and keeps lowercase; names keep their capitals.
+- **Dictionary and snippets:** teach spellings (`chat gpt => ChatGPT`) and voice shortcuts (`my calendar link => https://…`). Snippets can fill in `{date}`, `{time}`, `{day}`, `{year}` and `{clipboard}`.
+- **⌃⌥V pastes your last dictation again**, and Yap warns you if it can't hear you (wrong mic, muted input).
 - **Your iPhone as a wireless mic.** With the Yap Mic companion app, hold the button on your phone and talk from across the room. The connection is encrypted with a key only your phone and Mac share, and it stays on your Wi-Fi.
 - Pastes at your cursor **and** leaves the text on your clipboard, so it's never lost. Searchable history and a words-dictated counter.
 
@@ -47,7 +51,18 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - **No time limit.** When you stop, the video is copied to your clipboard; paste it straight into Slack, Mail or an issue.
 - **Auto-zoom:** the video smoothly zooms in where you click, follows your pointer, then eases back out. The original is kept; one click removes the zoom.
 - **Blur:** draw boxes over emails, API keys or names to blur or pixelate them, for the whole video or part of it.
-- On-device **transcript, captions, AI title, summary and chapters** for every recording. Built-in trim.
+- **Shortcuts on screen:** combos like ⌘K appear in the video for tutorials. Ordinary typing never does.
+- On-device **transcript, captions, AI title, summary and chapters** for every recording. Built-in trim, and a
+  **burned-in captions** export for places that ignore `.srt` files.
+
+### Meeting notes
+- **⌥⇧M** when a call starts, again when it ends. Works with Zoom, Meet, Teams, FaceTime or anything else, and no
+  bot joins the call.
+- Yap records your microphone and your Mac's sound separately, so the transcript knows what **You** said and what
+  the **Others** said. Without headphones your mic also hears the call; Yap drops that echo.
+- When it ends you get a title, a summary and **action items** (with who and when), made on this Mac and copied as
+  Markdown, ready for Notion, Linear, Slack or an email. Library → Meetings keeps them with the audio, and every
+  line plays from where it was said.
 
 ### The Flow bar
 A small pill that lives at the bottom of your screen. It shows a live waveform and your words as you talk, and the
@@ -68,9 +83,9 @@ one quick roll when your text lands, and pulses red while recording. Timing and 
 
 ### Shortcuts and automation
 `yap://` links let Shortcuts ("Open URLs"), Raycast, Alfred, Stream Deck or a script control Yap: `yap://dictate`,
-`yap://command`, `yap://record`, `yap://record-window`, `yap://camera`, `yap://copy-last`, `yap://library`,
-`yap://settings`. Add `?action=start|stop|cancel` to the dictation links, or `?action=start|stop|discard` to
-the recording ones. The full list is in Settings → General, where you can also turn the links off.
+`yap://command`, `yap://record`, `yap://record-window`, `yap://meeting`, `yap://camera`, `yap://copy-last`,
+`yap://library`, `yap://settings`. Add `?action=start|stop|cancel` to the dictation links, or
+`?action=start|stop|discard` to the recording and meeting ones. The full list is in Settings → General, where you can also turn the links off.
 
 ### Models (Settings → Models)
 | Job | Default | Optional |
@@ -144,7 +159,7 @@ On first launch Yap walks you through these (Settings → Permissions shows thei
 | Microphone | Hear you while you dictate or narrate |
 | Input Monitoring | Notice your dictation key (Yap only *listens*; it never blocks or changes your typing) |
 | Accessibility | Paste at your cursor and read selected text for Command Mode |
-| Screen & System Audio Recording | Record your screen, only while you're recording |
+| Screen & System Audio Recording | Record your screen, or hear the other side of a call for meeting notes, only while you're recording |
 | Camera (optional) | The camera bubble |
 | Local Network (optional) | Only after you pair an iPhone, to find it on your Wi-Fi |
 
@@ -155,6 +170,7 @@ Everything runs locally. Yap stores:
 | What | Where |
 |---|---|
 | Recordings, captions (`.srt`), notes (`.yap.json`) | `~/Movies/Yap` (configurable) |
+| Meeting audio and notes (`meeting.json`) | `~/Movies/Yap/Meetings` |
 | Dictation history | `~/Library/Application Support/Yap/history.json` |
 | Downloaded Whisper models | `~/Library/Application Support/Yap/Models` |
 | Diagnostic log (events and timings, never what you said) | `~/Library/Logs/Yap.log` |

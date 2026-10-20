@@ -2,33 +2,60 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key><string>Yap</string>
-    <key>CFBundleDisplayName</key><string>Yap</string>
-    <key>CFBundleIdentifier</key><string>app.yap.mac</string>
-    <key>CFBundleExecutable</key><string>Yap</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0.0</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>SUFeedURL</key><string>https://github.com/max-pantom/yap/releases/latest/download/appcast.xml</string>
-    <key>SUEnableAutomaticChecks</key><true/>
-    <key>LSMinimumSystemVersion</key><string>26.0</string>
-    <key>LSUIElement</key><true/>
-    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSCameraUseContinuityCameraDeviceType</key><true/>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key><string>app.yap.mac</string>
-            <key>CFBundleURLSchemes</key><array><string>yap</string></array>
-        </dict>
-    </array>
-    <key>NSMicrophoneUsageDescription</key><string>Yap listens to your voice while you hold the dictation key, and records your narration in screen recordings. Audio never leaves your Mac.</string>
-    <key>NSCameraUsageDescription</key><string>Yap shows your camera in a floating bubble during screen recordings.</string>
-    <key>NSSpeechRecognitionUsageDescription</key><string>Yap transcribes your speech on-device.</string>
-    <key>NSLocalNetworkUsageDescription</key><string>Yap listens for your paired iPhone on your local network so it can be your wireless microphone.</string>
-    <key>NSBonjourServices</key><array><string>_yapmic._tcp</string></array>
-    <key>NSAudioCaptureUsageDescription</key><string>Yap can include your Mac's system audio in screen recordings.</string>
+	<key>CFBundleDisplayName</key>
+	<string>Yap</string>
+	<key>CFBundleExecutable</key>
+	<string>Yap</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>app.yap.mac</string>
+	<key>CFBundleName</key>
+	<string>Yap</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.yap.mac</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>yap</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Yap can include your Mac's system audio in screen recordings.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_yapmic._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Yap shows your camera in a floating bubble during screen recordings.</string>
+	<key>NSCameraUseContinuityCameraDeviceType</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Yap listens for your paired iPhone on your local network so it can be your wireless microphone.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Yap listens to your voice while you hold the dictation key, and records your narration in screen recordings. Audio never leaves your Mac.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Yap transcribes your speech on-device.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/max-pantom/yap/releases/latest/download/appcast.xml</string>
 </dict>
 </plist>
