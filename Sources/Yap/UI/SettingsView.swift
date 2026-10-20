@@ -320,6 +320,7 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.autoZoom) var autoZoom = true
     @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
+    @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
 
     var body: some View {
         Form {
@@ -375,6 +376,17 @@ private struct RecordingTab: View {
                 Text("After recording")
             } footer: {
                 Text("Every recording also gets a transcript, captions, a title, a summary and chapters, made on this Mac. Find them in the Library.")
+            }
+
+            Section {
+                Toggle(isOn: $meetingCopyNotes) {
+                    Text("Copy the notes when a meeting ends")
+                    Text("Ready to paste into Notion, Linear, Slack or an email, as Markdown.")
+                }
+            } header: {
+                Text("Meetings")
+            } footer: {
+                Text("Press \(Shortcut.label(.meeting)) when a call starts and again when it ends. Yap writes down who said what, then a summary and action items, all on this Mac. Works with any call app. Headphones give the cleanest notes.")
             }
 
             Section("Video file") {

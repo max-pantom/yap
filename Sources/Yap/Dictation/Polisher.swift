@@ -128,6 +128,74 @@ actor Polisher {
         return Self.parseInsights(text)
     }
 
+    struct MeetingNotes { var title: String; var summary: String; var actions: [String] }
+
+    /// Title, summary and action items for a meeting. Long calls don't fit the on-device model at once, so each
+    /// part is boiled down to notes first, then the notes are summarised together.
+    func meetingNotes(for lines: [Meeting.Line]) async -> MeetingNotes? {
+        guard LLM.isAvailable(for: .summary), !lines.isEmpty else { return nil }
+        let budget = 8500
+        var parts: [String] = [""]
+        for l in lines {
+            let line = "[\(Self.stamp(l.start))] \(l.speaker.label): \(l.text)\n"
+            if parts[parts.count - 1].count + line.count > budget { parts.append("") }
+            parts[parts.count - 1] += line
+        }
+        let instructions = """
+        You take notes for meetings from their transcript. "You" is the person keeping the notes; "Others" is \
+        everyone else on the call. Be specific: names, numbers, dates, decisions. Never invent anything that \
+        isn't in the transcript.
+        """
+        var source = parts[0]
+        if parts.count > 1 {
+            var notes = ""
+            for (i, part) in parts.enumerated() {
+                let prompt = """
+                Part \(i + 1) of \(parts.count) of a meeting transcript:
+                \(part)
+                List what was discussed, decided and agreed to do in this part, as short bullet points starting with "- ".
+                """
+                if let n = await generate(.summary, instructions: instructions, prompt: prompt, timeout: 90, fallbackTimeout: 45) {
+                    notes += "Part \(i + 1):\n\(n)\n"
+                }
+            }
+            source = String(notes.prefix(budget))
+        }
+        let prompt = """
+        \(parts.count > 1 ? "Notes from each part of a meeting:" : "Meeting transcript:")
+        \(source)
+        Respond in exactly this format and nothing else:
+        TITLE: <what the meeting was about, at most 7 words>
+        SUMMARY: <2-4 sentences: what was discussed and decided>
+        ACTIONS:
+        - <one task, who will do it (a name, or You or Others, never "I"), and when if said>
+        (one line per task. Include every task anyone will do, not just "You". For example "Others: Dana \
+        will update the doc" is the task "- Update the doc (Dana)". Write "- none" if there are none)
+        """
+        guard let text = await generate(.summary, instructions: instructions, prompt: prompt, timeout: 120, fallbackTimeout: 60) else { return nil }
+        return Self.parseMeetingNotes(text)
+    }
+
+    static func parseMeetingNotes(_ text: String) -> MeetingNotes? {
+        var title = "", summary = "", actions: [String] = []
+        var inActions = false
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            let upper = line.uppercased()
+            if upper.hasPrefix("TITLE:") { title = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\"*"))); continue }
+            if upper.hasPrefix("SUMMARY:") { summary = String(line.dropFirst(8)).trimmingCharacters(in: .whitespaces); inActions = false; continue }
+            if upper.hasPrefix("ACTIONS") || upper.hasPrefix("ACTION ITEMS") { inActions = true; continue }
+            if inActions {
+                let item = line.trimmingCharacters(in: CharacterSet(charactersIn: "-*•[] ").union(.whitespaces))
+                if !item.isEmpty, item.lowercased() != "none" { actions.append(item) }
+            } else if !summary.isEmpty, !line.isEmpty {
+                summary += " " + line  // a summary that ran onto a second line
+            }
+        }
+        guard !title.isEmpty || !summary.isEmpty else { return nil }
+        return MeetingNotes(title: title.isEmpty ? "Meeting" : title, summary: summary, actions: actions)
+    }
+
     // MARK: Plumbing
 
     /// Runs `task` on its chosen model; if that's the second model and it fails, Apple Intelligence takes over.

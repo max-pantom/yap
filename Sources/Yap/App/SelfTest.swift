@@ -32,6 +32,29 @@ enum SelfTest {
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
         }
+        if args.contains("--meeting-test") {
+            // Echo removal, the notes parser, then real notes from the on-device model.
+            Prefs.registerDefaults()
+            let others: [Meeting.Line] = [
+                .init(start: 2, end: 6, speaker: .others, text: "Can you send the launch checklist by Friday?"),
+                .init(start: 14, end: 18, speaker: .others, text: "Great, and Priya will book the venue for the 12th."),
+            ]
+            let you: [Meeting.Line] = [
+                .init(start: 2.4, end: 6.3, speaker: .you, text: "can you send the launch checklist by friday"),  // echo
+                .init(start: 8, end: 12, speaker: .you, text: "Yes, I'll send it Thursday and copy Sam."),
+            ]
+            let merged = MeetingController.merge(you: you, others: others)
+            print("merge:", merged.map { "\($0.speaker.label): \($0.text)" }, merged.count == 3 ? "ok" : "FAILED")
+            let parsed = Polisher.parseMeetingNotes("TITLE: Launch prep\nSUMMARY: Agreed dates.\nACTIONS:\n- Send checklist (You, Thursday)\n- Book venue (Priya)")
+            print("parse:", parsed.map { "\($0.title) | \($0.actions)" } ?? "nil", parsed?.actions.count == 2 ? "ok" : "FAILED")
+            Task {
+                let t0 = Date()
+                let notes = await Polisher.shared.meetingNotes(for: merged)
+                print(String(format: "notes (%.1fs):", Date().timeIntervalSince(t0)), notes.map { "\($0.title) | \($0.summary) | \($0.actions)" } ?? "no model")
+                exit(0)
+            }
+            RunLoop.main.run()
+        }
         if args.contains("--devices") {
             MainActor.assumeIsolated {
                 for d in Devices.shared.cameras { print("camera:", d.name, d.isPhone ? "(iPhone)" : "", "uid:", d.id) }

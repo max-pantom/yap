@@ -6,6 +6,7 @@ import AppKit
 ///     yap://command            same, in Command Mode
 ///     yap://record             start or stop a screen recording              (?action=start|stop|discard)
 ///     yap://record-window      pick a window or app to record
+///     yap://meeting            start or end meeting notes                    (?action=start|stop|discard)
 ///     yap://camera             show or hide the camera bubble
 ///     yap://copy-last          copy your last dictation to the clipboard
 ///     yap://library  ·  yap://settings
@@ -23,6 +24,8 @@ enum URLCommands {
         ("yap://record", "Start or stop recording the screen"),
         ("yap://record?action=discard", "Also: start, stop"),
         ("yap://record-window", "Pick a window or app to record"),
+        ("yap://meeting", "Start or end meeting notes"),
+        ("yap://meeting?action=discard", "Also: start, stop"),
         ("yap://camera", "Show or hide the camera bubble"),
         ("yap://copy-last", "Copy your last dictation"),
         ("yap://library", "Open the Library"),
@@ -65,6 +68,14 @@ enum URLCommands {
             default: rec.toggle()
             }
         case "record-window": rec.recordPicked()
+        case "meeting":
+            let m = model.meeting
+            switch action {
+            case "start": m.start()
+            case "stop": Task { await m.stop() }
+            case "discard": m.discard()
+            default: m.toggle()
+            }
         case "camera": rec.camera.toggle()
         case "copy-last":
             guard let last = model.history.entries.first else { HUD.shared.toast("No dictations yet", symbol: "text.bubble"); return }

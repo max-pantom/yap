@@ -332,6 +332,7 @@ private struct RecordingColumns: View {
     @AppStorage(Prefs.Key.autoZoom) var autoZoom = true
     @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
+    @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
 
     var body: some View {
         Section {
@@ -364,6 +365,13 @@ private struct RecordingColumns: View {
                         minimumValueLabel: { Text("Subtle").font(.caption) } maximumValueLabel: { Text("Close").font(.caption) }
                         .labelsHidden().frame(width: 240).padding(.leading, 20)
                 }
+            }
+        }
+        GroupRule()
+        Section {
+            Row("Meetings") {
+                Toggle("Copy the notes when a meeting ends", isOn: $meetingCopyNotes)
+                Hint("Press \(Shortcut.label(.meeting)) when a call starts. Yap writes who said what, a summary and action items. Headphones give the cleanest notes.")
             }
         }
         GroupRule()

@@ -118,6 +118,53 @@ struct ControlBarView: View {
     }
 }
 
+// MARK: - Meeting pill
+
+@MainActor
+final class MeetingBar {
+    static let shared = MeetingBar()
+    private var panel: OverlayPanel?
+
+    func show(for meeting: MeetingController) {
+        let p = OverlayPanel(size: NSSize(width: 260, height: 44), interactive: true)
+        p.contentView = NSHostingView(rootView: MeetingBarView(meeting: meeting))
+        p.isMovableByWindowBackground = true
+        p.placeBottomCenter(offset: 24)
+        p.orderFrontRegardless()
+        panel = p
+    }
+
+    func hide() { panel?.orderOut(nil); panel = nil }
+}
+
+private struct MeetingBarView: View {
+    @ObservedObject var meeting: MeetingController
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.2.wave.2.fill").font(.system(size: 13)).symbolEffect(.pulse)
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                let s = Int(ctx.date.timeIntervalSince(meeting.startedAt ?? ctx.date))
+                Text("Notes · " + (s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s / 60) % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)))
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            }
+            Spacer(minLength: 0)
+            Button { meeting.discard() } label: { Image(systemName: "trash").font(.system(size: 13)) }
+                .help("Discard this meeting")
+            Button { Task { await meeting.stop() } } label: {
+                Text("End").font(.system(size: 12, weight: .bold))
+                    .padding(.horizontal, 10).frame(height: 26).background(.red, in: Capsule())
+            }
+            .help("End and write the notes (\(Shortcut.label(.meeting)))")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .padding(.leading, 14).padding(.trailing, 9)
+        .frame(width: 260, height: 44)
+        .background(.black.opacity(0.85), in: Capsule())
+    }
+}
+
 // MARK: - Countdown
 
 @MainActor

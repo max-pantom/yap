@@ -37,6 +37,7 @@ final class AppModel: ObservableObject {
     let library = LibraryStore()
     lazy var dictation = DictationController(history: history)
     lazy var recorder = RecordingController(library: library)
+    let meeting = MeetingController()
 
     /// The live mark in the menu bar (a template image, so macOS tints it for light and dark bars).
     @Published private(set) var menuImage = MarkRenderer.menuBarImage(MarkMotion.shared.frame)
@@ -59,11 +60,12 @@ final class AppModel: ObservableObject {
         })
 
         // What the mark does follows what Yap is doing.
-        observers.append(recorder.$phase.combineLatest(dictation.$phase).sink { rec, dic in
-            let state: MarkMotion.State = switch (rec, dic) {
-            case (.recording, _), (.countdown, _): .recording
-            case (_, .listening), (_, .locked): .listening
-            case (_, .thinking), (.processing, _): .thinking
+        observers.append(recorder.$phase.combineLatest(dictation.$phase, meeting.$phase).sink { rec, dic, meet in
+            let state: MarkMotion.State = switch (rec, dic, meet) {
+            case (.recording, _, _), (.countdown, _, _): .recording
+            case (_, .listening, _), (_, .locked, _): .listening
+            case (_, .thinking, _), (.processing, _, _), (_, _, .processing): .thinking
+            case (_, _, .recording): .recording
             default: .idle
             }
             MarkMotion.shared.set(state)
@@ -91,6 +93,9 @@ final class AppModel: ObservableObject {
         hotKeys.unregisterAll()
         if let s = Shortcut.get(.record) {
             hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.recorder.toggle() }
+        }
+        if let s = Shortcut.get(.meeting) {
+            hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.meeting.toggle() }
         }
         if let s = Shortcut.get(.camera) {
             hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.recorder.camera.toggle() }
@@ -213,6 +218,7 @@ struct MenuContent: View {
             Button((model.recorder.camera.isVisible ? "Hide Camera" : "Show Camera") + "  (\(Shortcut.label(.camera)))") { model.recorder.camera.toggle() }
             CameraPicker { model.recorder.camera.useSelectedDevice() }
         }
+        Section("Meetings") { MeetingButtons(meeting: model.meeting) }
         Divider()
         Button("Library…") { model.showLibrary() }.keyboardShortcut("l")
         Button("Settings…") { model.showSettings() }.keyboardShortcut(",")
@@ -246,6 +252,21 @@ private struct RecordButtons: View {
         } else {
             Button("Record Screen  (\(Shortcut.label(.record)))") { recorder.toggle() }
             Button("Record a Window or App…") { recorder.recordPicked() }
+        }
+    }
+}
+
+private struct MeetingButtons: View {
+    @ObservedObject var meeting: MeetingController
+    var body: some View {
+        switch meeting.phase {
+        case .recording:
+            Button("End Meeting Notes  (\(Shortcut.label(.meeting)))") { Task { await meeting.stop() } }
+            Button("Discard Meeting") { meeting.discard() }
+        case .processing:
+            Text(meeting.status.isEmpty ? "Writing meeting notes…" : meeting.status)
+        case .idle:
+            Button("Take Meeting Notes  (\(Shortcut.label(.meeting)))") { meeting.start() }
         }
     }
 }

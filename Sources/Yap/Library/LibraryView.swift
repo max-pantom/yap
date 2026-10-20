@@ -6,9 +6,15 @@ struct LibraryView: View {
     @Local private var section: Section = .recordings
 
     enum Section: String, CaseIterable, Identifiable {
-        case recordings = "Recordings", dictations = "Dictations"
+        case recordings = "Recordings", meetings = "Meetings", dictations = "Dictations"
         var id: String { rawValue }
-        var symbol: String { self == .recordings ? "play.rectangle.on.rectangle" : "text.bubble" }
+        var symbol: String {
+            switch self {
+            case .recordings: "play.rectangle.on.rectangle"
+            case .meetings: "person.2.wave.2"
+            case .dictations: "text.bubble"
+            }
+        }
     }
 
     var body: some View {
@@ -21,6 +27,7 @@ struct LibraryView: View {
         } detail: {
             switch section {
             case .recordings: RecordingsPane(library: model.library, recorder: model.recorder)
+            case .meetings: MeetingsPane(meeting: model.meeting, store: model.meeting.store)
             case .dictations: DictationsPane(history: model.history, dictation: model.dictation)
             }
         }
