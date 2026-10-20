@@ -22,7 +22,7 @@ Meeting notes, translation, a new Settings design and a lot of small things that
   Turn it on in Settings → General → Experimental.
 - **yap:// links.** Start dictation, a recording or meeting notes from Shortcuts, Raycast, Alfred, Stream Deck or a
   script.
-- **Updates.** Yap can check for new versions itself, and releases are notarized by Apple.
+- **Updates.** Yap checks for new versions and installs them itself. Every update is signed, so only real ones install.
 
 ### Better
 - **Fits in with your text.** Mid-sentence, Yap adds the space and keeps it lowercase. Names keep their capitals.
