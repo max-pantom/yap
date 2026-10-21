@@ -2,6 +2,13 @@
 
 Every release, newest first. The same list is on [yap.primitive8.cc/changelog](https://yap.primitive8.cc/changelog).
 
+## Next
+
+### Better
+- **Choose where recordings go.** Settings → Recording → Saved in → Change… picks any folder for recordings, their
+  captions and notes (.json) and meeting notes, and offers to move the ones you already have. Use Default goes back
+  to ~/Movies/Yap.
+
 ## 1.1 · 20 October 2026
 
 Meeting notes, translation, a new Settings design and a lot of small things that make dictation feel right.

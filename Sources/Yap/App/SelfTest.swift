@@ -32,6 +32,28 @@ enum SelfTest {
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
         }
+        if args.contains("--folder-move-test") {
+            // Moving recordings to a new folder: files move, existing folders merge, same-name files stay behind.
+            let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("yap-move-\(UUID().uuidString)")
+            let old = root.appendingPathComponent("old"), new = root.appendingPathComponent("new")
+            func put(_ path: String, in dir: URL, _ text: String = "x") {
+                let u = dir.appendingPathComponent(path)
+                try? fm.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? text.write(to: u, atomically: true, encoding: .utf8)
+            }
+            for f in ["a.mp4", "a.yap.json", "a.clicks.json", "a.srt", ".originals/a.mp4", "Meetings/M1/meeting.json", "Meetings/M2/meeting.json", "dup.mp4"] { put(f, in: old) }
+            put("Meetings/M1/meeting.json", in: new, "already here"); put("dup.mp4", in: new, "already here")
+            let items = try! fm.contentsOfDirectory(at: old, includingPropertiesForKeys: nil)
+            let (moved, skipped) = RecordingsFolder.move(items, to: new)
+            let exists = { (p: String, d: URL) in fm.fileExists(atPath: d.appendingPathComponent(p).path) }
+            let ok = ["a.mp4", "a.yap.json", "a.clicks.json", "a.srt", ".originals/a.mp4", "Meetings/M2/meeting.json"].allSatisfy { exists($0, new) }
+                && exists("Meetings/M1/meeting.json", old) && exists("dup.mp4", old)          // conflicts stay behind, not lost
+                && (try? String(contentsOf: new.appendingPathComponent("dup.mp4"), encoding: .utf8)) == "already here"
+                && !exists("a.mp4", old) && !exists(".originals", old)
+            print("moved \(moved), skipped \(skipped):", ok ? "ok" : "FAILED")
+            try? fm.removeItem(at: root)
+            exit(ok ? 0 : 1)
+        }
         if args.contains("--meeting-test") {
             // Echo removal, the notes parser, then real notes from the on-device model.
             Prefs.registerDefaults()

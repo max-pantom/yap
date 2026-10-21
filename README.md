@@ -170,8 +170,8 @@ Everything runs locally. Yap stores:
 
 | What | Where |
 |---|---|
-| Recordings, captions (`.srt`), notes (`.yap.json`) | `~/Movies/Yap` (configurable) |
-| Meeting audio and notes (`meeting.json`) | `~/Movies/Yap/Meetings` |
+| Recordings, captions (`.srt`), notes (`.yap.json`) | `~/Movies/Yap`, or any folder (Settings → Recording → Saved in → Change…) |
+| Meeting audio and notes (`meeting.json`) | `Meetings` inside the recordings folder |
 | Dictation history | `~/Library/Application Support/Yap/history.json` |
 | Downloaded Whisper models | `~/Library/Application Support/Yap/Models` |
 | Diagnostic log (events and timings, never what you said) | `~/Library/Logs/Yap.log` |

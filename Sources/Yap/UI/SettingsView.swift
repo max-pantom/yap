@@ -398,12 +398,11 @@ private struct RecordingTab: View {
                     Text("30 frames a second").tag(30)
                     Text("60 frames a second").tag(60)
                 }
-                LabeledContent("Saved in") {
-                    Button(Prefs.recordingsFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")) {
-                        try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
-                        NSWorkspace.shared.open(Prefs.recordingsFolder)
-                    }
-                    .buttonStyle(.link)
+                LabeledContent {
+                    RecordingsFolderControl()
+                } label: {
+                    Text("Saved in")
+                    Text("Videos, captions, their notes (.json) and meeting notes.")
                 }
             }
         }

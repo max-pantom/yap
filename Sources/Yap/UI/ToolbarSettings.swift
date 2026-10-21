@@ -391,11 +391,10 @@ private struct RecordingColumns: View {
                 .pickerStyle(.radioGroup).horizontalRadioGroupLayout().labelsHidden()
             }
             LabeledContent("Saved in:") {
-                Button(Prefs.recordingsFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")) {
-                    try? FileManager.default.createDirectory(at: Prefs.recordingsFolder, withIntermediateDirectories: true)
-                    NSWorkspace.shared.open(Prefs.recordingsFolder)
+                VStack(alignment: .leading, spacing: 4) {
+                    RecordingsFolderControl()
+                    Text("Videos, captions, their notes and meeting notes.").font(.caption).foregroundStyle(.secondary)
                 }
-                .buttonStyle(.link)
             }
         }
     }
