@@ -1,11 +1,22 @@
 {
- "master": 0,
- "music": 0,
- "sfx": 0,
+ "master": -22.5,
+ "music": -31.5,
+ "sfx": -35,
  "limiter": true,
- "mute": {},
- "solo": {},
- "groups": {},
+ "mute": {
+  "music": false,
+  "g:Countdown whooshes": true,
+  "g:Countdown thumps": true,
+  "g:Recording starts": true
+ },
+ "solo": {
+  "music": true
+ },
+ "groups": {
+  "Arrival bloom": -15,
+  "Countdown thumps": -36,
+  "Countdown whooshes": -36
+ },
  "items": {},
  "sections": [
   0,

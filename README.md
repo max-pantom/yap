@@ -13,7 +13,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/flowbar.png" width="760" alt="The Flow bar in its states: idle, hover, listening, hands-free, thinking, pasted">
+  <a href="design/launch/out/yap-launch-v3.mp4"><img src="docs/launch.gif" width="760" alt="Yap's launch film: dictating into a chat, a screen recording with auto-zoom, meeting notes, and the Flow bar turning into the Yap mark"></a><br>
+  <sub><a href="design/launch/out/yap-launch-v3.mp4">▶ Watch it with sound</a></sub>
 </p>
 
 ---

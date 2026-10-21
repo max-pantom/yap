@@ -177,7 +177,8 @@
     } catch (_) {}
     build();
     render();
-    $("status").textContent = `${stems.length} sounds and the music loaded`;
+    $("status").textContent = new URLSearchParams(location.search).has("rendered")
+      ? "Rendered out/yap-launch-v3.mp4 with this soundtrack." : `${stems.length} sounds and the music loaded`;
   }
 
   // ---------- The mix ----------
@@ -425,29 +426,17 @@
     catch (e) { $("status").textContent = e.message; }
     busy(false);
   };
+  // Rendering runs on the film page itself, then comes back here.
   $("render").onclick = async () => {
     busy(true); pause();
     try {
       $("status").textContent = "Saving the soundtrack…";
       await save();
-      $("status").textContent = "Rendering the film (about 10 seconds)…";
-      const frame = document.createElement("iframe");
-      frame.style.cssText = "position:fixed;left:-4000px;top:0;width:1280px;height:900px;border:0";
-      frame.src = "launch.html?render=" + Date.now();
-      document.body.appendChild(frame);
-      await new Promise((r) => (frame.onload = r));
-      const w = frame.contentWindow;
-      for (let i = 0; i < 100 && !w.exportFilm; i++) await new Promise((r) => setTimeout(r, 100));
-      await w.document.fonts.ready;
-      await w.exportFilm("yap-launch-v3");
-      const res = w.exportResult;
-      frame.remove();
-      if (!res || !res.ok) throw new Error(res?.error || "Rendering failed");
-      video.src = "out/yap-launch-v3.mp4?" + Date.now();
-      $("status").textContent = `Rendered out/yap-launch-v3.mp4 (${(res.bytes / 1e6).toFixed(1)} MB, ${res.sound ? "with sound" : "silent"}).`;
-    } catch (e) { $("status").textContent = e.message; }
-    busy(false);
+      location.href = "launch.html?export=yap-launch-v3&return=" + encodeURIComponent("/sound?rendered=" + Date.now());
+    } catch (e) { $("status").textContent = e.message; busy(false); }
   };
+  const back = new URLSearchParams(location.search);
+  if (back.has("rendered")) video.src = "out/yap-launch-v3.mp4?" + Date.now();
   $("reset").onclick = () => { S = structuredClone(DEFAULTS); build(); render(); $("status").textContent = "Back to the original mix (not saved yet)."; };
 
   requestAnimationFrame(tick);
