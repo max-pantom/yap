@@ -31,13 +31,16 @@
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
 <script>
-// Yap launch film: 16 seconds, 1920×1080, in the look of yap.primitive8.cc. Every frame is a pure function of
-// time, so the preview and the exported MP4 are identical. Export saves to ./out through serve.py.
+// Yap launch film, v2: one continuous camera on the white page. Kinetic type that the camera tracks (Cosmos),
+// line work that morphs into the logo (X), and a camera that never stops moving: slow push-ins, orbits around
+// floating windows, shallow focus and motion blur on the fast moves (Meta). Every frame is a pure function of
+// time, so the preview and the exported MP4 are identical.
 (() => {
   const W = 1920, H = 1080, FPS = 30, DUR = 16;
   const INK = "#000", MUTED = "rgba(0,0,0,0.5)", SCENE = "#e8e8ed", RED = "#e6383b", PAPER = "#fff";
   const canvas = document.getElementById("film");
-  const ctx = canvas.getContext("2d");
+  const main = canvas.getContext("2d");
+  let g = main;                                   // the context everything draws into (swapped for layers)
 
   // ---------- Timing ----------
   function bezier(x1, y1, x2, y2) {
@@ -45,19 +48,19 @@
     return (x) => {
       if (x <= 0) return 0; if (x >= 1) return 1;
       let lo = 0, hi = 1;
-      for (let i = 0; i < 28; i++) { const m = (lo + hi) / 2; (f(x1, x2, m) < x) ? lo = m : hi = m; }
+      for (let i = 0; i < 26; i++) { const m = (lo + hi) / 2; (f(x1, x2, m) < x) ? lo = m : hi = m; }
       return f(y1, y2, (lo + hi) / 2);
     };
   }
   const easeOut = bezier(0.23, 1, 0.32, 1);
   const easeInOut = bezier(0.77, 0, 0.175, 1);
+  const easeIn = (x) => x * x * x;
+  const backOut = (x) => { const c1 = 1.9, c3 = c1 + 1; return x <= 0 ? 0 : x >= 1 ? 1 : 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const prog = (t, a, b) => clamp((t - a) / (b - a));
   const mix = (a, b, e) => a + (b - a) * e;
-  /** Opacity of something shown from `a` to `b`, fading in and out. */
-  const life = (t, a, b, fin = 0.3, fout = 0.25) => easeOut(prog(t, a, a + fin)) * (1 - easeInOut(prog(t, b - fout, b)));
 
-  // ---------- The mark (Yap's own settings, same construction as the app and Mark Lab) ----------
+  // ---------- The mark (Yap's own settings and construction) ----------
   const cfg = {
     ease: [0.77, 0, 0.175, 1], holdMs: 220, moveMs: 860,
     stroke: 10, rim: 9, fillet: 5.8, fullness: 0.62, smallBoost: 1.55,
@@ -68,7 +71,7 @@
       [[24, -28], [60, -140], [-72, -82]],
       [[164, -8], [-38, -150], [-160, 0]],
     ],
-    idleDrift: 7, startMs: 1100, pasteMs: 420,
+    idleDrift: 7,
   };
   const markEase = bezier(...cfg.ease);
   const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
@@ -94,19 +97,6 @@
     return lerpRings(frames[i], frames[i + 1], local < hold ? 0 : markEase((local - hold) / (cfg.moveMs / 1000)));
   }
   const drift = (rings, t, amt) => rings.map((p, i) => [p[0] + amt * Math.sin(t * 0.9 + i * 2.1), p[1] + amt * Math.cos(t * 0.7 + i * 1.7)]);
-  const idleRings = (t) => drift(cfg.keys[0], t, cfg.idleDrift);
-  function startupRings(u) {      // rings slide in from outside the ball while the outline draws on
-    const p = clamp(u / (cfg.startMs / 1000)), e = easeOut(p);
-    const rings = cfg.keys[0].map(([x, y], i) => {
-      const ang = Math.atan2(y || -1, x || 0.001) + i * 0.4;
-      return [x + (Math.cos(ang) * 330 - x) * (1 - e), y + (Math.sin(ang) * 330 - y) * (1 - e)];
-    });
-    return { rings, rim: easeOut(clamp(p * 1.25)) };
-  }
-  function pastedRings(u, from) {  // one quick roll to the next keyframe
-    const to = match(from, cfg.keys[1]);
-    return lerpRings(from, to, easeOut(clamp(u / (cfg.pasteMs / 1000))));
-  }
 
   const work = new Map();
   function workFor(px) {
@@ -118,8 +108,7 @@
     return work.get(px);
   }
   function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
-  /** Renders the mark at `px` pixels and returns a canvas to draw from (reused, so draw it right away). */
-  function mark(px, rings, { ink = INK, rim = 1, alpha = 1 } = {}) {
+  function mark(px, rings, { ink = INK, rim = 1 } = {}) {
     px = Math.max(8, Math.round(px));
     const { a, b, out, actx, bctx, octx } = workFor(px);
     const small = px < 80, boost = small ? cfg.smallBoost : 1;
@@ -144,330 +133,540 @@
     }
     bctx.putImageData(img, 0, 0);
     octx.clearRect(0, 0, px, px);
-    octx.globalAlpha = alpha;
     octx.drawImage(b, 0, 0);
     octx.strokeStyle = ink; octx.lineWidth = cfg.rim * boost * s;
     octx.beginPath();
     octx.arc(c, c, R - cfg.rim * boost * s / 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * rim);
     octx.stroke();
-    octx.globalAlpha = 1;
     return out;
   }
-  function drawMark(cx, cy, size, rings, opt) {
-    const m = mark(size * (opt?.res ?? 1), rings, opt);
-    ctx.drawImage(m, cx - size / 2, cy - size / 2, size, size);
+  /** The mark at `size` units; `res` is how much the camera enlarges it, so it stays sharp when zoomed. */
+  function drawMark(cx, cy, size, rings, opt = {}) {
+    const m = mark(Math.min(1100, size * (opt.res ?? 1)), rings, opt);
+    g.drawImage(m, cx - size / 2, cy - size / 2, size, size);
   }
 
-  // ---------- Drawing helpers ----------
-  function font(size, weight = 500, family = "Geist") { return `${weight} ${size}px "${family}"`; }
-  function text(s, x, y, { size = 48, weight = 500, color = INK, align = "left", family = "Geist", track = -0.02, baseline = "alphabetic" } = {}) {
-    ctx.font = font(size, weight, family);
-    ctx.letterSpacing = `${(track * size).toFixed(2)}px`;
-    ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = baseline;
-    ctx.fillText(s, x, y);
+  // ---------- Drawing helpers (all draw into `g`) ----------
+  const font = (size, weight = 500, family = "Geist") => `${weight} ${size}px "${family}"`;
+  function txt(s, x, y, { size = 48, weight = 500, color = INK, align = "left", family = "Geist", track = -0.02 } = {}) {
+    g.font = font(size, weight, family);
+    g.letterSpacing = `${(track * size).toFixed(2)}px`;
+    g.fillStyle = color; g.textAlign = align; g.textBaseline = "alphabetic";
+    g.fillText(s, x, y);
   }
   function measure(s, size, weight = 500, family = "Geist", track = -0.02) {
-    ctx.font = font(size, weight, family);
-    ctx.letterSpacing = `${(track * size).toFixed(2)}px`;
-    return ctx.measureText(s).width;
+    g.font = font(size, weight, family);
+    g.letterSpacing = `${(track * size).toFixed(2)}px`;
+    return g.measureText(s).width;
   }
   function rr(x, y, w, h, r, fill, stroke, lw = 2) {
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
-    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+    g.beginPath(); g.roundRect(x, y, w, h, r);
+    if (fill) { g.fillStyle = fill; g.fill(); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
   }
-  function withAlpha(a, fn) { if (a <= 0.001) return; ctx.save(); ctx.globalAlpha *= a; fn(); ctx.restore(); }
-  function rise(a, px = 26) { return (1 - a) * px; }  // things settle upwards as they fade in
-
-  // A feature scene: label, heading and one line on the left, a grey demo panel on the right, like the site.
-  const CARD = { x: 840, y: 140, w: 920, h: 800 };
-  function featureText(t, a, b, label, heading, line, chip) {
-    const l1 = life(t, a + 0.05, b), l2 = life(t, a + 0.12, b), l3 = life(t, a + 0.22, b);
-    withAlpha(l1, () => {
-      text(label, 160, 448 + rise(l1), { size: 28, color: MUTED, track: 0 });
-      if (chip) {
-        const w = measure(label, 28, 500, "Geist", 0);
-        rr(160 + w + 16, 420 + rise(l1), 74, 36, 18, INK);
-        text(chip, 160 + w + 53, 445 + rise(l1), { size: 20, weight: 600, color: PAPER, align: "center", track: 0 });
-      }
+  function alpha(a, fn) { if (a <= 0.002) return; g.save(); g.globalAlpha *= Math.min(1, a); fn(); g.restore(); }
+  function check(x, y, s, color) {
+    g.strokeStyle = color; g.lineWidth = 4 * s; g.lineCap = "round"; g.lineJoin = "round";
+    g.beginPath(); g.moveTo(x - 7 * s, y); g.lineTo(x - 2 * s, y + 6 * s); g.lineTo(x + 8 * s, y - 6 * s); g.stroke();
+  }
+  /** The camera: looks at (cx, cy) with zoom and roll, plus a breathing drift so it is never quite still. */
+  function camera(t, cx, cy, zoom, roll, fn, { tx = 0, ty = 0, breathe = 1 } = {}) {
+    g.save();
+    const dx = breathe * 7 * Math.sin(t * 0.61), dy = breathe * 5 * Math.sin(t * 0.47 + 1), dr = breathe * 0.0025 * Math.sin(t * 0.37);
+    g.translate(W / 2 + tx + dx, H / 2 + ty + dy);
+    g.rotate(roll + dr);
+    g.scale(zoom, zoom);
+    g.translate(-cx, -cy);
+    fn();
+    g.restore();
+  }
+  // A layer is an offscreen canvas painted with its own context, so cards can be projected in perspective.
+  const layers = new Map();
+  function layer(name, w, h, scale, paint) {
+    let L = layers.get(name);
+    if (!L || L.c.width !== Math.round(w * scale)) {
+      const c = document.createElement("canvas"); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      L = { c, x: c.getContext("2d") }; layers.set(name, L);
+    }
+    const prev = g; g = L.x;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, L.c.width, L.c.height); g.globalAlpha = 1; g.filter = "none";
+    g.scale(scale, scale);
+    paint();
+    g = prev;
+    return L.c;
+  }
+  // Cards turn around their vertical axis (yaw) with real perspective, drawn as thin vertical strips.
+  const EYE = 2600;
+  function project(cx, cy, w, h, yaw, lx, ly) {
+    const x = lx - w / 2, X = x * Math.cos(yaw), Z = x * Math.sin(yaw), s = EYE / (EYE + Z);
+    return [cx + X * s, cy + (ly - h / 2) * s, s];
+  }
+  function drawCard(src, cx, cy, w, h, yaw, { shadow = 0.16 } = {}) {
+    if (shadow > 0) {
+      const [lx] = project(cx, cy, w, h, yaw, 0, 0), [rx] = project(cx, cy, w, h, yaw, w, 0);
+      g.save(); g.filter = "blur(36px)"; g.fillStyle = `rgba(0,0,0,${shadow})`;
+      g.beginPath(); g.roundRect(lx + 30, cy - h / 2 + 50, rx - lx - 60, h * 0.96, 40); g.fill(); g.restore();
+    }
+    const N = 64;
+    for (let i = 0; i < N; i++) {
+      const u0 = i / N, u1 = (i + 1) / N;
+      const [x0, , s0] = project(cx, cy, w, h, yaw, u0 * w, 0), [x1, , s1] = project(cx, cy, w, h, yaw, u1 * w, 0);
+      const hs = h * (s0 + s1) / 2;
+      g.drawImage(src, u0 * src.width, 0, (u1 - u0) * src.width, src.height, x0, cy - hs / 2, x1 - x0 + 0.7, hs);
+    }
+  }
+  /** Words that appear one at a time, rising into place. Returns the line's width. */
+  function kinetic(t, words, x, y, t0, { size = 56, step = 0.09, dur = 0.42, align = "center", color = INK, weight = 500, rise = 30, track = -0.02 } = {}) {
+    const sp = measure(" ", size, weight, "Geist", track);
+    const ws = words.map((w) => measure(w, size, weight, "Geist", track));
+    const total = ws.reduce((a, b) => a + b, 0) + sp * (words.length - 1);
+    let cx = align === "center" ? x - total / 2 : x;
+    words.forEach((w, i) => {
+      const a = easeOut(prog(t, t0 + i * step, t0 + i * step + dur));
+      alpha(a, () => txt(w, cx, y + (1 - a) * rise, { size, weight, color, track }));
+      cx += ws[i] + sp;
     });
-    withAlpha(l2, () => text(heading, 156, 540 + rise(l2), { size: 88 }));
-    withAlpha(l3, () => text(line, 160, 604 + rise(l3), { size: 32, color: MUTED, track: -0.01 }));
-  }
-  function card(t, a, b, draw) {
-    const l = life(t, a, b, 0.4, 0.25), e = easeOut(prog(t, a, a + 0.55));
-    withAlpha(l, () => {
-      ctx.save();
-      ctx.translate((1 - e) * 70, 0);
-      rr(CARD.x, CARD.y, CARD.w, CARD.h, 36, SCENE);
-      ctx.beginPath(); ctx.roundRect(CARD.x, CARD.y, CARD.w, CARD.h, 36); ctx.clip();
-      draw(t - a);
-      ctx.restore();
-    });
-  }
-  function header(t) {  // the site's header: the mark and "by p8"
-    const l = life(t, 2.4, 14.05, 0.4, 0.3);
-    withAlpha(l, () => {
-      drawMark(182, 112, 44, idleRings(t), { res: 2 });
-      text("by p8", 218, 121, { size: 24, color: MUTED, track: 0 });
-    });
+    return total;
   }
 
-  // ---------- Scenes ----------
-  function intro(t) {                       // 0 – 2.4
-    const out = 1 - easeInOut(prog(t, 2.05, 2.4));
-    withAlpha(out, () => {
-      const st = startupRings(t - 0.1);
-      const rings = t < 1.25 ? st.rings : idleRings(t - 1.25);
-      drawMark(960, 400, 300, rings, { rim: t < 1.25 ? st.rim : 1 });
-      const a1 = easeOut(prog(t, 0.95, 1.4)), a2 = easeOut(prog(t, 1.25, 1.7));
-      withAlpha(a1, () => text("Less typing.", 960, 708 + rise(a1), { size: 104, align: "center" }));
-      withAlpha(a2, () => text("More yapping.", 960, 830 + rise(a2), { size: 104, align: "center" }));
+  // ---------- Reusable pieces ----------
+  function flowBar(t, cx, cy, s, { listen = 1, think = 0, res = 1 } = {}) {
+    // The black pill with the mark and a live waveform, like the real Flow bar.
+    const w = mix(330, 112, easeInOut(think)) * s, h = 76 * s;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "#0b0b0c");
+    const mx = think > 0 ? mix(cx - 112 * s, cx, easeInOut(think)) : cx - 112 * s;
+    drawMark(mx, cy, 48 * s, think > 0 ? loopRings(t * 3.2) : loopRings(0.4 + t * 1.7), { ink: "#ffffff", res: res * 2 });
+    const bars = 14, on = listen * (1 - easeInOut(think));
+    for (let i = 0; i < bars; i++) {
+      const v = (0.35 + 0.65 * Math.max(0, Math.sin(t * 13 + i * 0.35))) * (Math.sin(t * 2.3 + 0.6) > -0.8 ? 1 : 0.35);
+      const shape = 0.35 + 0.65 * Math.sin(Math.PI * (i + 0.5) / bars);
+      const bh = (10 + 34 * v * (0.45 + 0.55 * Math.abs(Math.sin(t * 9 + i * 1.3))) * shape) * on * s;
+      if (bh < 1) continue;
+      rr(cx - 62 * s + i * 13 * s, cy - bh / 2, 6 * s, bh, 3 * s, "#ffffff");
+    }
+  }
+  function windowChrome(w, h, title) {
+    rr(0, 0, w, h, 26, PAPER, "#e6e6ea", 2);
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(34 + i * 24, 32, 7, 0, Math.PI * 2); g.fillStyle = "#dcdce1"; g.fill(); }
+    if (title) txt(title, w / 2, 40, { size: 22, weight: 600, color: "rgba(0,0,0,0.55)", align: "center", track: 0 });
+  }
+  function ghostWindow(seed) {      // out-of-focus windows behind the action, for depth
+    return layer("ghost" + seed, 760, 480, 1, () => {
+      windowChrome(760, 480, "");
+      rr(28, 70, 190, 380, 16, "#f3f3f5");
+      for (let i = 0; i < 7; i++) rr(250, 90 + i * 46, [420, 360, 450, 300, 400, 260, 380][(i + seed) % 7], 18, 9, "#ececf0");
     });
   }
 
-  function dictation(t) {                   // 2.4 – 6.0
-    const a = 2.4, b = 6.0;
-    featureText(t, a, b, "Voice dictation", "Just say it.", "Talk. Yap types it, cleaned up.");
-    card(t, a, b, (u) => {
-      // A chat window with the cursor in its message box.
-      const wx = CARD.x + 60, wy = CARD.y + 70, ww = 800, wh = 430;
-      rr(wx, wy, ww, wh, 22, PAPER);
-      text("# launch", wx + 36, wy + 58, { size: 28, weight: 600, track: -0.01 });
-      rr(wx + 36, wy + 96, 46, 46, 23, "#d4d4da");
-      text("Maya", wx + 100, wy + 112, { size: 22, weight: 600, track: 0 });
-      text("When do we ship 1.1?", wx + 100, wy + 142, { size: 26, color: "rgba(0,0,0,0.75)", track: -0.01 });
-      const pasted = u >= 2.55;
-      if (pasted) {
-        const p = easeOut(prog(u, 2.55, 2.9));
-        withAlpha(p, () => {
-          rr(wx + 36, wy + 182 + rise(p, 12), 46, 46, 23, INK);
-          text("You", wx + 100, wy + 198 + rise(p, 12), { size: 22, weight: 600, track: 0 });
-          text("Ship it Thursday at 4.", wx + 100, wy + 228 + rise(p, 12), { size: 26, color: "rgba(0,0,0,0.75)", track: -0.01 });
-        });
-      }
-      // Message box: the text lands here, then "send it" sends it.
-      const sent = u >= 2.9;
-      rr(wx + 30, wy + wh - 104, ww - 60, 72, 16, PAPER, "#d9d9de");
-      if (pasted && !sent) {
-        text("Ship it Thursday at 4.", wx + 58, wy + wh - 58, { size: 26, track: -0.01 });
-      } else if (!pasted || sent) {
-        text("Message #launch", wx + 58, wy + wh - 58, { size: 26, color: "rgba(0,0,0,0.35)", track: -0.01 });
-      }
-      if (Math.floor(u * 2.2) % 2 === 0 && !(pasted && !sent)) rr(wx + 56, wy + wh - 86, 3, 36, 1.5, INK);
-
-      // The Flow bar.
-      const cx = CARD.x + CARD.w / 2, cy = CARD.y + 660;
-      const listen = prog(u, 0.3, 0.55), think = prog(u, 1.95, 2.2), paste = prog(u, 2.5, 2.75), done = prog(u, 3.15, 3.4);
-      const e1 = easeOut(listen), e2 = easeInOut(think), e3 = easeOut(paste), e4 = easeInOut(done);
-      let pw = mix(70, 330, e1); pw = mix(pw, 110, e2); pw = mix(pw, 520, e3); pw = mix(pw, 70, e4);
-      let ph = mix(12, 72, e1); ph = mix(ph, 72, e3); ph = mix(ph, 12, e4);
-      const pillColor = e1 > 0.02 && e4 < 0.98 ? "#0b0b0c" : "rgba(0,0,0,0.35)";
-      rr(cx - pw / 2, cy - ph / 2, pw, ph, ph / 2, pillColor);
-      if (e1 > 0.5 && paste === 0) {
-        const markX = think > 0 ? cx - mix(110, 0, e2) : cx - 110;
-        const rings = think > 0 ? loopRings(u * 3.2) : loopRings(0.4 + u * 1.7);
-        drawMark(markX, cy, 44, rings, { ink: "#ffffff", res: 2, alpha: clamp((e1 - 0.5) * 2) });
-        // Waveform: louder in syllables, quiet between words.
-        const bars = 14, voiceOn = 1 - e2;
-        for (let i = 0; i < bars; i++) {
-          const v = (0.35 + 0.65 * Math.max(0, Math.sin(u * 13 + i * 0.35))) * (Math.sin(u * 2.3 + 0.6) > -0.8 ? 1 : 0.35);
-          const shape = 0.35 + 0.65 * Math.sin(Math.PI * (i + 0.5) / bars);
-          const h = (10 + 34 * v * (0.45 + 0.55 * Math.abs(Math.sin(u * 9 + i * 1.3))) * shape) * voiceOn;
-          if (h < 1) continue;
-          rr(cx - 62 + i * 13, cy - h / 2, 6, h, 3, "#ffffff");
+  // ---------- Scene 0 · "What if you could ▢ just say it?" (0 – 2.6) ----------
+  const S0_WORDS = ["What", "if", "you", "could", null, "just", "say", "it?"];
+  const S0_TIMES = [0.12, 0.34, 0.54, 0.74, 0.98, 1.26, 1.44, 1.62];
+  const S0_SIZE = 76, PILL_H = 80, PILL_S = PILL_H / 76, PILL_W = 330 * PILL_S;
+  function s0Layout() {
+    const sp = measure(" ", S0_SIZE) * 1.15;
+    let x = 0; const out = [];
+    for (const w of S0_WORDS) {
+      const width = w ? measure(w, S0_SIZE) : PILL_W;
+      out.push({ w, x, width }); x += width + sp;
+    }
+    return out;
+  }
+  function scene0(t) {
+    const L = s0Layout();
+    // The camera tracks the end of the sentence as it grows, then dives into the Flow bar's mark.
+    let cx = L[0].x + L[0].width / 2;
+    for (let i = 1; i < L.length; i++) {
+      const prevC = (L[0].x + L[i - 1].x + L[i - 1].width) / 2, c = (L[0].x + L[i].x + L[i].width) / 2;
+      cx += (c - prevC) * easeOut(prog(t, S0_TIMES[i], S0_TIMES[i] + 0.55));
+    }
+    const pill = L[4], markX = pill.x + PILL_W / 2 - 112 * PILL_S, markY = -26;
+    const dive = easeIn(prog(t, 2.0, 2.58));
+    const zoom = mix(1, 13, dive);
+    const camX = mix(cx, markX, easeInOut(prog(t, 1.9, 2.4)));
+    const camY = mix(-26, markY, easeInOut(prog(t, 1.9, 2.4)));
+    camera(t, camX, camY, zoom * mix(1, 1.04, prog(t, 0, 2)), 0, () => {
+      L.forEach((it, i) => {
+        const a = easeOut(prog(t, S0_TIMES[i], S0_TIMES[i] + 0.45));
+        if (it.w) {
+          const off = [0, 14, -10, 8, 0, -12, 10, 0][i];   // words land at slightly different heights, then settle
+          alpha(a, () => txt(it.w, it.x, (1 - a) * 46 + off * (1 - easeOut(prog(t, S0_TIMES[i] + 0.2, S0_TIMES[i] + 0.7))), { size: S0_SIZE }));
+        } else {
+          const p = backOut(prog(t, S0_TIMES[i], S0_TIMES[i] + 0.5));
+          if (p <= 0) return;
+          g.save(); g.translate(it.x + PILL_W / 2, -26); g.scale(p, p);
+          flowBar(t, 0, 0, PILL_S, { listen: 1, res: zoom });
+          g.restore();
         }
-      }
-      if (paste > 0 && done < 1) {
-        withAlpha(e3 * (1 - e4), () => {
-          ctx.beginPath(); ctx.arc(cx - 206, cy, 15, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
-          ctx.strokeStyle = "#0b0b0c"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-          ctx.beginPath(); ctx.moveTo(cx - 213, cy); ctx.lineTo(cx - 208, cy + 6); ctx.lineTo(cx - 198, cy - 6); ctx.stroke();
-          text("Pasted · also on your clipboard", cx - 176, cy + 9, { size: 26, weight: 500, color: "#fff", track: -0.01 });
-        });
-      }
-      // Live words above the Flow bar.
-      const raw = "ship it thursday at 3, no wait, 4";
-      const shown = raw.slice(0, Math.round(raw.length * prog(u, 0.6, 1.85)));
-      const bubble = easeOut(prog(u, 0.6, 0.8)) * (1 - easeInOut(prog(u, 2.1, 2.4)));
-      if (shown.length) withAlpha(bubble, () => {
-        const tw = Math.max(measure(raw, 26, 500, "Geist", -0.01), 10);
-        rr(cx - tw / 2 - 26, cy - 128, tw + 52, 58, 16, "#2a2a2d");
-        text(shown, cx - tw / 2, cy - 90, { size: 26, color: "#fff", track: -0.01 });
       });
     });
+    // Through the mark into white.
+    alpha(easeOut(prog(t, 2.28, 2.5)), () => { g.fillStyle = PAPER; g.fillRect(0, 0, W, H); });
   }
 
-  function recording(t) {                   // 6.0 – 9.2
-    const a = 6.0, b = 9.2;
-    featureText(t, a, b, "Screen recording", "Show, don't tell.", "Camera, clicks and smooth zooms.");
-    card(t, a, b, (u) => {
-      const sx = CARD.x + 60, sy = CARD.y + 60, sw = 800, sh = 680;
-      const btn = { x: sx + 560, y: sy + 520, w: 190, h: 64 };
-      const focus = [btn.x + btn.w * 0.78, btn.y + btn.h * 0.68];           // where the click lands
-      // Auto-zoom: scale up around the click and pan it towards the middle, like Yap does.
-      const ze = easeInOut(prog(u, 1.85, 2.6)), z = 1 + 0.45 * ze;
-      const to = [mix(focus[0], sx + sw * 0.55, ze * 0.6), mix(focus[1], sy + sh * 0.55, ze * 0.6)];
-      ctx.save();
-      ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, 20); ctx.clip();
-      rr(sx, sy, sw, sh, 20, PAPER);
-      ctx.translate(to[0], to[1]); ctx.scale(z, z); ctx.translate(-focus[0], -focus[1]);
-      // A simple app: window controls, a sidebar and a draft with a Publish button.
-      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(sx + 36 + i * 26, sy + 34, 8, 0, Math.PI * 2); ctx.fillStyle = "#d4d4da"; ctx.fill(); }
-      rr(sx + 24, sy + 72, 190, sh - 96, 14, "#f4f4f6");
-      for (let i = 0; i < 5; i++) rr(sx + 46, sy + 104 + i * 52, i === 1 ? 140 : 110, 20, 10, i === 1 ? "#cfcfd6" : "#e3e3e8");
-      text("Release notes", sx + 250, sy + 128, { size: 38, weight: 600 });
-      for (let i = 0; i < 6; i++) rr(sx + 250, sy + 170 + i * 40, [470, 430, 490, 380, 450, 300][i], 16, 8, "#ebebef");
-      rr(sx + 250, sy + 430, 230, 150, 14, "#f0f0f3");
-      rr(btn.x, btn.y, btn.w, btn.h, 32, INK);
-      text("Publish", btn.x + btn.w / 2, btn.y + 42, { size: 26, weight: 600, color: PAPER, align: "center", track: -0.01 });
-      // The pointer travels to Publish and clicks; a ring marks the click.
-      const m = easeInOut(prog(u, 1.15, 1.75));
-      const px = mix(sx + 380, focus[0], m), py = mix(sy + 300, focus[1], m);
-      const click = prog(u, 1.78, 2.3);
+  // ---------- Scene 1 · Just say it (2.4 – 5.4) ----------
+  const RAW = ["ship", "it", "thursday", "at", "3,", "no", "wait,", "4"];
+  const CLEAN = ["Ship", "it", "Thursday", "at", null, null, null, "4."];
+  function chatCard(u) {
+    return layer("chat", 900, 470, 2, () => {
+      windowChrome(900, 470, "Messages · #launch");
+      rr(36, 92, 54, 54, 27, "#d4d4da");
+      txt("Maya", 108, 112, { size: 24, weight: 600, track: 0 });
+      txt("When do we ship 1.1?", 108, 142, { size: 28, color: "rgba(0,0,0,0.75)", track: -0.01 });
+      const landed = easeOut(prog(u, 2.12, 2.3));
+      alpha(landed, () => {
+        rr(36, 186, 54, 54, 27, INK);
+        txt("You", 108, 206, { size: 24, weight: 600, track: 0 });
+        txt("Ship it Thursday at 4.", 108, 236, { size: 28, color: "rgba(0,0,0,0.75)", track: -0.01 });
+      });
+      rr(30, 366, 840, 76, 18, PAPER, "#dadade", 2);
+      txt("Message #launch", 60, 414, { size: 27, color: "rgba(0,0,0,0.32)", track: -0.01 });
+      if (Math.floor(u * 2.2) % 2 === 0) rr(58, 384, 3, 40, 1.5, INK);
+    });
+  }
+  const CHAT = { x: 960, y: 395, w: 900, h: 470 };
+  function scene1(t) {
+    const u = t - 2.4;
+    const arrive = easeOut(prog(u, 0, 0.6));
+    const whip = easeIn(prog(t, 5.05, 5.4));
+    const yaw = mix(-0.26, -0.07, easeOut(prog(u, 0, 2.8)));
+    camera(t, 960, 540, mix(2.3, 1, arrive) * mix(1, 1.06, prog(u, 0, 3)), mix(0.03, 0, arrive), () => {
+      // Depth: two windows far behind, out of focus, drifting the other way.
+      g.save(); g.filter = "blur(16px)"; g.globalAlpha = 0.9;
+      g.drawImage(ghostWindow(1), 120 - u * 14, 120, 600, 380);
+      g.drawImage(ghostWindow(2), 1280 + u * 10, 520, 560, 350);
+      g.restore();
+      drawCard(chatCard(u), CHAT.x, CHAT.y, CHAT.w, CHAT.h, yaw);
+      // The Flow bar listens, thinks, then says it's pasted.
+      const fx = 960, fy = 860;
+      const think = prog(u, 1.3, 1.6), done = prog(u, 1.95, 2.25);
+      if (done < 1) alpha(1 - easeInOut(done), () => flowBar(t, fx, fy, 1, { listen: easeOut(prog(u, 0.1, 0.35)), think }));
+      alpha(easeOut(done) * (1 - easeInOut(prog(u, 2.75, 3.0))), () => {
+        const tw = measure("Pasted · also on your clipboard", 27, 500, "Geist", -0.01) + 110;
+        rr(fx - tw / 2, fy - 38, tw, 76, 38, "#0b0b0c");
+        g.beginPath(); g.arc(fx - tw / 2 + 44, fy, 15, 0, Math.PI * 2); g.fillStyle = "#fff"; g.fill();
+        check(fx - tw / 2 + 44, fy, 1, "#0b0b0c");
+        txt("Pasted · also on your clipboard", fx - tw / 2 + 76, fy + 9, { size: 27, color: "#fff", track: -0.01 });
+      });
+      // The words: typed raw, cleaned up in place, then flown into the message.
+      const size = 34, sp = measure(" ", size) * 1.1, by = 760;
+      const rawW = RAW.map((w) => measure(w, size)), cleanW = CLEAN.map((w) => (w ? measure(w, size) : 0));
+      const rawTotal = rawW.reduce((a, b) => a + b, 0) + sp * (RAW.length - 1);
+      const kept = CLEAN.filter(Boolean).length, cleanTotal = cleanW.reduce((a, b) => a + b, 0) + sp * (kept - 1);
+      const clean = easeInOut(prog(u, 1.15, 1.6));
+      const fly = easeInOut(prog(u, 1.75, 2.2));
+      const bubbleA = easeOut(prog(u, 0.25, 0.45)) * (1 - easeOut(prog(u, 1.7, 1.9)));
+      const bw = mix(rawTotal, cleanTotal, clean) + 56;
+      alpha(bubbleA, () => rr(960 - bw / 2, by - 50, bw, 72, 18, "#2a2a2d"));
+      const [tx, ty, ts] = project(CHAT.x, CHAT.y, CHAT.w, CHAT.h, yaw, 108, 236);
+      const tScale = (28 / size) * ts;
+      let rx = 960 - rawTotal / 2, cxp = 960 - cleanTotal / 2;
+      RAW.forEach((w, i) => {
+        const shown = prog(u, 0.3 + i * 0.1, 0.42 + i * 0.1);
+        const gone = CLEAN[i] === null;
+        const x0 = rx, x1 = cxp;
+        rx += rawW[i] + sp;
+        if (!gone) cxp += cleanW[i] + sp;
+        if (shown <= 0) return;
+        if (gone) {   // the self-correction falls away
+          const f = easeIn(prog(u, 1.1, 1.45));
+          alpha(easeOut(shown) * (1 - f), () => {
+            g.save(); g.translate(x0, by + f * 60); g.rotate(f * 0.25 * (i % 2 ? 1 : -1));
+            txt(w, 0, 0, { size, color: "#ff8a8c", track: -0.01 }); g.restore();
+          });
+          return;
+        }
+        const x = mix(x0, x1, clean);
+        const word = clean > 0.5 ? CLEAN[i] : w;
+        const color = fly > 0 ? `rgba(${Math.round(mix(255, 0, fly))},${Math.round(mix(255, 0, fly))},${Math.round(mix(255, 0, fly))},1)` : "#fff";
+        // Fly along a curve up into the chat window.
+        const start = [x, by], end = [tx + (x1 - (960 - cleanTotal / 2)) * tScale, ty];
+        const ctrl = [mix(start[0], end[0], 0.5), Math.min(start[1], end[1]) - 140];
+        const px = (1 - fly) * (1 - fly) * start[0] + 2 * (1 - fly) * fly * ctrl[0] + fly * fly * end[0];
+        const py = (1 - fly) * (1 - fly) * start[1] + 2 * (1 - fly) * fly * ctrl[1] + fly * fly * end[1];
+        const sc = mix(1, tScale, fly);
+        alpha(easeOut(shown) * (1 - easeOut(prog(u, 2.14, 2.3))), () => {
+          g.save(); g.translate(px, py); g.scale(sc, sc);
+          txt(word, 0, 0, { size, color, track: -0.01 }); g.restore();
+        });
+      });
+    }, { tx: mix(0, -2700, whip) });
+    // Caption, Cosmos-style: small, word by word.
+    alpha(1 - whip, () => kinetic(t, ["Just", "say", "it."], 960, 1010, 2.95, { size: 40, step: 0.08 }));
+  }
+
+  // ---------- Scene 2 · Show, don't tell (5.15 – 8.5) ----------
+  const DESK = { x: 960, y: 500, w: 1100, h: 660 };
+  const BTN = { x: 820, y: 520, w: 210, h: 68 };
+  const CLICK = [BTN.x + BTN.w * 0.76, BTN.y + BTN.h * 0.7];
+  function deskCard(u) {
+    return layer("desk", DESK.w, DESK.h, 2, () => {
+      windowChrome(DESK.w, DESK.h, "Release notes");
+      rr(28, 70, 220, 560, 18, "#f4f4f6");
+      for (let i = 0; i < 6; i++) rr(52, 104 + i * 54, i === 1 ? 160 : 120, 20, 10, i === 1 ? "#cfcfd6" : "#e3e3e8");
+      txt("Yap 1.1", 290, 132, { size: 48, weight: 600 });
+      for (let i = 0; i < 6; i++) rr(290, 172 + i * 42, [620, 560, 660, 480, 590, 380][i], 18, 9, "#ebebef");
+      rr(290, 440, 300, 170, 16, "#f0f0f3");
+      rr(BTN.x, BTN.y, BTN.w, BTN.h, 34, INK);
+      txt("Publish", BTN.x + BTN.w / 2, BTN.y + 45, { size: 28, weight: 600, color: PAPER, align: "center", track: -0.01 });
+      // The pointer glides to Publish and clicks; a ring marks the click.
+      const m = easeInOut(prog(u, 1.35, 2.0));
+      const px = mix(560, CLICK[0], m), py = mix(300, CLICK[1], m);
+      const click = prog(u, 2.02, 2.5);
       if (click > 0 && click < 1) {
-        ctx.beginPath(); ctx.arc(focus[0], focus[1], mix(14, 70, easeOut(click)), 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0,0,0,${0.45 * (1 - click)})`; ctx.lineWidth = 6; ctx.stroke();
+        g.beginPath(); g.arc(CLICK[0], CLICK[1], mix(14, 80, easeOut(click)), 0, Math.PI * 2);
+        g.strokeStyle = `rgba(0,0,0,${0.5 * (1 - click)})`; g.lineWidth = 7; g.stroke();
       }
-      if (u > 1.05) {
-        ctx.save(); ctx.translate(px, py); ctx.scale(1.25, 1.25);
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 30); ctx.lineTo(8, 23); ctx.lineTo(13, 34); ctx.lineTo(19, 31); ctx.lineTo(14, 21); ctx.lineTo(24, 21); ctx.closePath();
-        ctx.fillStyle = INK; ctx.fill(); ctx.strokeStyle = PAPER; ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.stroke();
-        ctx.restore();
+      if (u > 1.0) {
+        g.save(); g.translate(px, py); g.scale(1.35, 1.35);
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.lineTo(8, 23); g.lineTo(13, 34); g.lineTo(19, 31); g.lineTo(14, 21); g.lineTo(24, 21); g.closePath();
+        g.fillStyle = INK; g.fill(); g.strokeStyle = PAPER; g.lineWidth = 2.5; g.lineJoin = "round"; g.stroke();
+        g.restore();
       }
-      ctx.restore();
-      // Countdown, then the recording chip and camera bubble (not zoomed: they're Yap's, on top).
-      for (let n = 0; n < 3; n++) {
-        const p = prog(u, 0.15 + n * 0.3, 0.45 + n * 0.3);
-        if (p <= 0 || p >= 1) continue;
-        withAlpha(Math.sin(Math.PI * p), () => {
-          const s = mix(1.15, 0.95, easeOut(p));
-          ctx.save(); ctx.translate(sx + sw / 2, sy + sh / 2); ctx.scale(s, s);
-          ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI * 2); ctx.fillStyle = "rgba(0,0,0,0.78)"; ctx.fill();
-          text(String(3 - n), 0, 50, { size: 150, weight: 600, color: PAPER, align: "center", track: 0 });
-          ctx.restore();
-        });
-      }
-      const rec = easeOut(prog(u, 1.05, 1.35));
-      withAlpha(rec, () => {
-        rr(sx + sw - 196, sy + 22, 172, 54, 27, "rgba(0,0,0,0.82)");
-        const pulse = 0.8 + 0.2 * Math.cos((u - 1.05) * 5);
-        ctx.beginPath(); ctx.arc(sx + sw - 166, sy + 49, 10, 0, Math.PI * 2); ctx.fillStyle = RED; ctx.globalAlpha *= pulse; ctx.fill(); ctx.globalAlpha /= pulse;
-        const secs = Math.max(0, Math.floor((u - 1.05) * 1.6));
-        text(`0:${String(secs).padStart(2, "0")}`, sx + sw - 140, sy + 60, { size: 28, weight: 500, family: "Geist Mono", color: PAPER, track: 0 });
-        const cs = mix(0.6, 1, easeOut(prog(u, 1.05, 1.5)));
-        ctx.save(); ctx.translate(sx + 130, sy + sh - 130); ctx.scale(cs, cs);
-        ctx.shadowColor = "rgba(0,0,0,0.25)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
-        ctx.beginPath(); ctx.arc(0, 0, 96, 0, Math.PI * 2); ctx.fillStyle = PAPER; ctx.fill();
-        ctx.shadowColor = "transparent";
-        ctx.beginPath(); ctx.arc(0, 0, 89, 0, Math.PI * 2); ctx.save(); ctx.clip();
-        const g = ctx.createLinearGradient(0, -90, 0, 90); g.addColorStop(0, "#dcdfe6"); g.addColorStop(1, "#b9bec9"); ctx.fillStyle = g; ctx.fillRect(-90, -90, 180, 180);
-        ctx.fillStyle = "#6f7480";
-        ctx.beginPath(); ctx.arc(0, -16, 34, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(0, 78, 70, 56, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.restore(); ctx.restore();
+      // Yap's own overlays: recording chip and the camera bubble.
+      const rec = easeOut(prog(u, 1.0, 1.3));
+      alpha(rec, () => {
+        rr(DESK.w - 214, 22, 186, 56, 28, "rgba(0,0,0,0.85)");
+        g.beginPath(); g.arc(DESK.w - 182, 50, 11, 0, Math.PI * 2); g.fillStyle = RED; g.fill();
+        const secs = Math.max(0, Math.floor((u - 1.0) * 1.7));
+        txt(`0:${String(secs).padStart(2, "0")}`, DESK.w - 160, 61, { size: 29, family: "Geist Mono", color: PAPER, track: 0 });
       });
+      const cs = backOut(prog(u, 1.1, 1.6));
+      if (cs > 0) {
+        g.save(); g.translate(130, DESK.h - 130); g.scale(cs, cs);
+        g.beginPath(); g.arc(0, 0, 100, 0, Math.PI * 2); g.fillStyle = PAPER; g.fill();
+        g.beginPath(); g.arc(0, 0, 93, 0, Math.PI * 2); g.save(); g.clip();
+        const gr = g.createLinearGradient(0, -93, 0, 93); gr.addColorStop(0, "#dfe2e8"); gr.addColorStop(1, "#b6bbc6"); g.fillStyle = gr; g.fillRect(-93, -93, 186, 186);
+        g.fillStyle = "#6c717d";
+        g.beginPath(); g.arc(0, -16, 36, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.ellipse(0, 82, 74, 58, 0, 0, Math.PI * 2); g.fill();
+        g.restore(); g.restore();
+      }
     });
   }
-
-  function meeting(t) {                     // 9.2 – 12.4
-    const a = 9.2, b = 12.4;
-    featureText(t, a, b, "Meeting notes", "Every call, noted.", "Who said what, and what's next.", "New");
-    card(t, a, b, (u) => {
-      const wx = CARD.x + 60, wy = CARD.y + 60, ww = 800, wh = 680;
-      rr(wx, wy, ww, wh, 22, PAPER);
-      text("Launch sync", wx + 40, wy + 72, { size: 38, weight: 600 });
-      text("Today · Zoom · 3 people", wx + 40, wy + 112, { size: 24, color: MUTED, track: 0 });
-      // The meeting pill while it listens.
-      const live = 1 - easeInOut(prog(u, 1.55, 1.8));
-      withAlpha(live, () => {
-        rr(wx + ww - 300, wy + 40, 260, 56, 28, "#0b0b0c");
-        const secs = 40 + Math.floor(u * 2);
-        text(`Notes · 0:${secs}`, wx + ww - 274, wy + 77, { size: 24, weight: 600, color: PAPER, track: 0 });
-        rr(wx + ww - 116, wy + 49, 64, 38, 19, RED);
-        text("End", wx + ww - 84, wy + 75, { size: 20, weight: 700, color: PAPER, align: "center", track: 0 });
+  function scene2(t) {
+    const u = t - 5.15;
+    const enter = easeOut(prog(t, 5.15, 5.5)), whip = easeIn(prog(t, 8.2, 8.5));
+    // 3 · 2 · 1, each numeral flying past the camera.
+    for (let n = 0; n < 3; n++) {
+      const p = prog(u, 0.12 + n * 0.3, 0.44 + n * 0.3);
+      if (p <= 0 || p >= 1) continue;
+      alpha(Math.min(1, (1 - p) * 3), () => {
+        const s = mix(0.7, 2.6, easeIn(p));
+        g.save(); g.translate(W / 2 + mix(2600, 0, enter), H / 2); g.scale(s, s);
+        txt(String(3 - n), 0, 190, { size: 540, weight: 600, align: "center", track: -0.04 });
+        g.restore();
       });
-      const lines = [
-        ["Others", "Can we ship 1.1 on Thursday?"],
-        ["You", "Yes. I'll send the release notes tomorrow."],
-        ["Others", "Great, and Ada will update the site."],
-      ];
-      lines.forEach(([who, said], i) => {
-        const p = easeOut(prog(u, 0.3 + i * 0.32, 0.6 + i * 0.32));
-        withAlpha(p, () => {
-          const y = wy + 190 + i * 64 + rise(p, 14);
-          text(who, wx + 40, y, { size: 24, weight: 600, color: who === "You" ? INK : "rgba(0,0,0,0.45)", track: 0 });
-          text(said, wx + 150, y, { size: 26, color: "rgba(0,0,0,0.8)", track: -0.01 });
+    }
+    const show = easeOut(prog(u, 0.95, 1.5));
+    if (show <= 0) return;
+    const yaw = mix(0.34, 0.08, easeOut(prog(u, 0.95, 2.4)));
+    const [zx, zy] = project(DESK.x, DESK.y, DESK.w, DESK.h, yaw, CLICK[0], CLICK[1]);
+    const zoom = easeInOut(prog(u, 2.1, 2.75));      // the auto-zoom is the camera pushing in on the click
+    camera(t, mix(960, zx, zoom), mix(540, zy, zoom), mix(0.9, 1, show) * mix(1, 1.7, zoom) * mix(1, 1.03, prog(u, 1, 3.3)), 0, () => {
+      g.save(); g.filter = "blur(18px)"; g.globalAlpha = 0.85;
+      g.drawImage(ghostWindow(3), 1420 - u * 12, 80, 520, 330);
+      g.restore();
+      alpha(show, () => drawCard(deskCard(u), DESK.x, DESK.y, DESK.w, DESK.h, yaw));
+    }, { ty: mix(0, -1700, whip) });
+    alpha(show * (1 - whip), () => kinetic(t, ["Show,", "don't", "tell."], 960, 1010, 6.3, { size: 40, step: 0.08 }));
+  }
+
+  // ---------- Scene 3 · Every call, noted (8.3 – 11.6) ----------
+  const NOTE = { x: 960, y: 470, w: 1000, h: 660 };
+  const LINES = [
+    ["Others", "Can we ship 1.1 on Thursday?", 0.35],
+    ["You", "Yes. I'll send the release notes tomorrow.", 0.9],
+    ["Others", "Great, and Ada will update the site.", 1.45],
+  ];
+  function notesCard(u) {
+    return layer("notes", NOTE.w, NOTE.h, 2, () => {
+      windowChrome(NOTE.w, NOTE.h, "");
+      txt("Launch sync", 44, 112, { size: 44, weight: 600 });
+      txt("Today · Zoom · 3 people", 44, 152, { size: 25, color: MUTED, track: 0 });
+      const live = 1 - easeInOut(prog(u, 2.0, 2.3));
+      alpha(live, () => {
+        rr(NOTE.w - 300, 74, 256, 58, 29, "#0b0b0c");
+        txt(`Notes · 0:${40 + Math.floor(u * 2)}`, NOTE.w - 274, 112, { size: 24, weight: 600, color: PAPER, track: 0 });
+        rr(NOTE.w - 118, 84, 64, 38, 19, RED);
+        txt("End", NOTE.w - 86, 110, { size: 20, weight: 700, color: PAPER, align: "center", track: 0 });
+      });
+      const settle = easeInOut(prog(u, 2.05, 2.5));
+      LINES.forEach(([who, said, at], i) => {
+        const y = 230 + i * 66;
+        const a = easeOut(prog(u, at, at + 0.3));
+        alpha(a * mix(1, 0.45, settle), () => {
+          const you = who === "You";
+          const cw = measure(who, 21, 600, "Geist", 0) + 30;
+          rr(44, y - 30, cw, 40, 20, you ? INK : null, you ? null : "rgba(0,0,0,0.25)", 2);
+          txt(who, 44 + cw / 2, y - 3, { size: 21, weight: 600, color: you ? PAPER : "rgba(0,0,0,0.55)", align: "center", track: 0 });
+          kinetic(u, said.split(" "), 186, y, at + 0.05, { size: 29, step: 0.05, dur: 0.3, align: "left", rise: 14, color: "rgba(0,0,0,0.85)", track: -0.01 });
         });
       });
-      // The notes write themselves: action items appear, then get ticked off.
-      const n = easeOut(prog(u, 1.7, 2.0));
-      withAlpha(n, () => {
-        rr(wx + 40, wy + 400 + rise(n, 10), ww - 80, 2, 1, "#ececf0");
-        text("Action items", wx + 40, wy + 456 + rise(n, 10), { size: 28, weight: 600, track: -0.01 });
+      const n = easeOut(prog(u, 2.05, 2.35));
+      alpha(n, () => {
+        rr(44, 450, NOTE.w - 88, 2, 1, "#ececf0");
+        txt("Action items", 44, 506, { size: 30, weight: 600, track: -0.01 });
       });
       [["Send the release notes", "You · tomorrow"], ["Update the website", "Ada"]].forEach(([task, who], i) => {
-        const p = easeOut(prog(u, 1.9 + i * 0.22, 2.2 + i * 0.22));
-        withAlpha(p, () => {
-          const y = wy + 510 + i * 64 + rise(p, 12);
-          const done = easeOut(prog(u, 2.55 + i * 0.25, 2.75 + i * 0.25));
-          rr(wx + 40, y, 32, 32, 9, done > 0 ? `rgba(0,0,0,${done})` : null, "rgba(0,0,0,0.35)", 2.5);
-          if (done > 0) {
-            ctx.strokeStyle = PAPER; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-            ctx.beginPath(); ctx.moveTo(wx + 48, y + 17); ctx.lineTo(wx + 54, y + 23); ctx.lineTo(wx + 65, y + 10); ctx.stroke();
-          }
-          text(task, wx + 92, y + 26, { size: 26, color: done > 0.5 ? "rgba(0,0,0,0.45)" : INK, track: -0.01 });
-          const tw = measure(task, 26, 500, "Geist", -0.01);
-          text(who, wx + 92 + tw + 16, y + 26, { size: 22, color: MUTED, track: 0 });
+        const p = backOut(prog(u, 2.2 + i * 0.16, 2.6 + i * 0.16));
+        if (p <= 0) return;
+        const y = 548 + i * 58, done = prog(u, 2.7 + i * 0.25, 2.85 + i * 0.25);
+        alpha(clamp(p), () => {
+          g.save(); g.translate(44 + 18, y + 18); const pop = done > 0 ? 1 + 0.3 * Math.sin(Math.PI * done) : 1; g.scale(pop, pop);
+          rr(-18, -18, 36, 36, 10, done > 0 ? INK : null, done > 0 ? null : "rgba(0,0,0,0.35)", 2.5);
+          if (done > 0) check(0, 0, 1, PAPER);
+          g.restore();
+          txt(task, 100, y + 28, { size: 28, color: done > 0.5 ? "rgba(0,0,0,0.42)" : INK, track: -0.01 });
+          const tw = measure(task, 28, 500, "Geist", -0.01);
+          txt(who, 100 + tw + 16, y + 28, { size: 23, color: MUTED, track: 0 });
         });
       });
     });
   }
-
-  function privacy(t) {                     // 12.4 – 14.0
-    const a = 12.4, b = 14.0;
-    const l0 = life(t, a + 0.05, b, 0.3, 0.25);
-    withAlpha(l0, () => text("Privacy", 960, 330 + rise(l0), { size: 28, color: MUTED, align: "center", track: 0 }));
-    ["No account.", "No cloud.", "All on your Mac."].forEach((s, i) => {
-      const l = life(t, a + 0.12 + i * 0.2, b, 0.35, 0.25);
-      withAlpha(l, () => text(s, 960, 470 + i * 140 + rise(l), { size: 112, align: "center", color: i === 2 ? INK : "rgba(0,0,0,0.32)" }));
+  function scene3(t, { still = false } = {}) {
+    const u = t - 8.3;
+    const enter = still ? 1 : easeOut(prog(t, 8.3, 8.68));
+    const yaw = mix(-0.2, -0.05, easeOut(prog(u, 0, 3)));
+    camera(t, 960, mix(500, 545, easeInOut(prog(u, 0.3, 2.6))), mix(1, 1.05, prog(u, 0, 3.3)), 0, () => {
+      g.save(); g.filter = "blur(18px)"; g.globalAlpha = 0.85;
+      g.drawImage(ghostWindow(4), 60 + u * 10, 600, 560, 350);
+      g.restore();
+      drawCard(notesCard(u), NOTE.x, NOTE.y, NOTE.w, NOTE.h, yaw);
+    }, { ty: mix(1700, 0, enter) });
+    if (still) return;
+    const cap = 1 - easeInOut(prog(t, 11.45, 11.7));
+    alpha(cap, () => {
+      const w = kinetic(t, ["Every", "call,", "noted."], 930, 1010, 8.85, { size: 40, step: 0.08 });
+      const ca = backOut(prog(t, 9.15, 9.5));
+      if (ca > 0) {
+        g.save(); g.translate(930 + w / 2 + 52, 997); g.scale(ca, ca);
+        rr(-38, -20, 76, 40, 20, INK);
+        txt("New", 0, 8, { size: 21, weight: 600, color: PAPER, align: "center", track: 0 });
+        g.restore();
+      }
     });
   }
 
-  function endCard(t) {                     // 14.0 – 16.0
-    const u = t - 14.0;
-    const m = easeOut(prog(u, 0, 0.5));
-    withAlpha(m, () => {
-      const rings = u < 0.45 ? pastedRings(Math.max(0, u - 0.05), cfg.keys[0]) : drift(match(cfg.keys[0], cfg.keys[1]), u - 0.45, cfg.idleDrift);
-      drawMark(960, 360 + rise(m, 20), 240, rings);
+  // ---------- Scene 4 · Everything at once, all on your Mac (11.45 – 13.75) ----------
+  let thumbs = null;
+  function makeThumbs() {      // each scene at its best moment, rendered once
+    const shot = (fn) => {
+      const c = document.createElement("canvas"); c.width = W / 2; c.height = H / 2;
+      const prev = g; g = c.getContext("2d"); g.scale(0.5, 0.5);
+      g.fillStyle = PAPER; g.fillRect(0, 0, W, H); fn(); g = prev; return c;
+    };
+    thumbs = [
+      shot(() => scene1(4.62)),
+      shot(() => scene2(7.95)),
+      shot(() => scene3(11.35, { still: true })),
+    ];
+  }
+  const SLOT = { w: 540, h: 340 };
+  const slotX = (i) => 960 + (i - 1) * 600;
+  // The part of each thumbnail (half-size frames) that shows the window, at the cards' shape.
+  const CROP = [[150, 40, 660, 416], [130, 20, 700, 441], [190, 40, 580, 365]];
+  function scene4(t) {
+    if (!thumbs) makeThumbs();
+    const v = t - 11.45;
+    const shrink = easeInOut(prog(v, 0, 0.6));
+    const gather = easeInOut(prog(t, 13.7, 14.25));
+    camera(t, 960, 500, mix(1, 1.05, prog(v, 0.5, 2.6)), 0, () => {
+      [0, 1, 2].forEach((i) => {            // meeting notes last, so the middle card sits on top
+        const thumb = thumbs[i];
+        // Meeting notes (thumb 2) is the card we pull back from; it lands in the middle.
+        const slot = i === 2 ? 1 : i === 1 ? 2 : 0;
+        const fromFull = i === 2;
+        const sx = slotX(slot), sy = 470;
+        const s = fromFull ? mix(W / SLOT.w, 1, shrink) : 1;
+        const enter = fromFull ? 1 : easeOut(prog(v, 0.25 + slot * 0.08, 0.85 + slot * 0.08));
+        const x = fromFull ? mix(960, sx, shrink) : mix(sx + (slot === 0 ? -1600 : 1600), sx, enter);
+        const y = fromFull ? mix(540, sy, shrink) : sy;
+        const yaw = fromFull ? 0 : (slot === 0 ? 0.42 : -0.42) * mix(1.6, 1, enter) + 0.05 * Math.sin(t * 0.8 + slot);
+        const bob = 8 * Math.sin(t * 1.1 + slot * 1.7);
+        const card = layer("thumb" + i, SLOT.w, SLOT.h, 1.5, () => {
+          rr(0, 0, SLOT.w, SLOT.h, 28, PAPER);
+          g.save(); g.beginPath(); g.roundRect(0, 0, SLOT.w, SLOT.h, 28); g.clip();
+          const [sx0, sy0, sw0, sh0] = CROP[i]; g.drawImage(thumb, sx0, sy0, sw0, sh0, 0, 0, SLOT.w, SLOT.h); g.restore();
+          rr(1, 1, SLOT.w - 2, SLOT.h - 2, 27, null, "rgba(0,0,0,0.08)", 2);
+        });
+        if (gather > 0) return;   // scene 5 takes the cards from here
+        alpha(fromFull ? 1 : enter, () => drawCard(card, x, y + bob, SLOT.w * s, SLOT.h * s, yaw, { shadow: 0.14 * (fromFull ? shrink : 1) }));
+      });
     });
-    const h = easeOut(prog(u, 0.2, 0.6));
-    withAlpha(h, () => text("Got something to say?", 960, 640 + rise(h), { size: 96, align: "center" }));
-    const p = easeOut(prog(u, 0.4, 0.8));
-    withAlpha(p, () => {
-      const label = "Download for Mac ↗", w = measure(label, 34, 500, "Geist", -0.01) + 80;
-      rr(960 - w / 2, 708 + rise(p, 14), w, 80, 40, INK);
-      text(label, 960, 760 + rise(p, 14), { size: 34, color: PAPER, align: "center", track: -0.01 });
-    });
-    const s = easeOut(prog(u, 0.55, 0.95));
-    withAlpha(s, () => {
-      text("Free and open source · yap.primitive8.cc", 960, 870 + rise(s, 12), { size: 30, color: MUTED, align: "center", track: -0.005 });
-      text("by p8", 960, 1010, { size: 24, color: MUTED, align: "center", track: 0 });
+    alpha(1 - gather, () => kinetic(t, ["No", "account.", "No", "cloud.", "All", "on", "your", "Mac."], 960, 900, 12.2, { size: 58, step: 0.11 }));
+  }
+
+  // ---------- Scene 5 · The cards become the mark (13.7 – 16) ----------
+  const MARK = { x: 960, y: 405, size: 300 };
+  function scene5(t) {
+    if (!thumbs) makeThumbs();
+    const w = t - 13.7;
+    const gather = easeInOut(prog(w, 0, 0.6));
+    const real = easeInOut(prog(w, 0.5, 0.85));
+    camera(t, 960, 540, mix(1.05, 1, gather) * mix(1, 1.045, prog(w, 0.6, 2.3)), 0, () => {
+      // Three cards fly in, round off into circles and become the mark's three rings; the ball draws around them.
+      const rings = cfg.keys[0], R = 145 * MARK.size / 300;
+      const slots = [0, 2, 1];
+      [0, 1, 2].forEach((i) => {
+        const slot = slots[i];
+        const fx = slotX(slot), fy = 470 + 8 * Math.sin(t * 1.1 + slot * 1.7);
+        const [rx, ry] = rings[i];
+        const tx = MARK.x + rx * MARK.size / 300, ty = MARK.y + ry * MARK.size / 300;
+        const cw = mix(SLOT.w, 2 * R, gather), ch = mix(SLOT.h, 2 * R, gather);
+        const x = mix(fx, tx, gather), y = mix(fy, ty, gather);
+        const rad = mix(28, R, gather);
+        alpha(1 - real, () => {
+          g.save();
+          g.beginPath(); g.roundRect(x - cw / 2, y - ch / 2, cw, ch, rad);
+          alpha(1 - easeOut(prog(w, 0.15, 0.5)), () => {
+            g.save(); g.clip(); const [sx0, sy0, sw0, sh0] = CROP[i]; g.drawImage(thumbs[i], sx0, sy0, sw0, sh0, x - cw / 2, y - ch / 2, cw, ch); g.restore();
+          });
+          g.strokeStyle = `rgba(0,0,0,${mix(0.08, 1, easeOut(prog(w, 0.05, 0.4)))})`; g.lineWidth = mix(2, cfg.stroke, gather); g.stroke();
+          g.restore();
+        });
+      });
+      alpha(1 - real, () => {  // the ball's outline drawing on
+        const p = easeOut(prog(w, 0.3, 0.8));
+        g.beginPath(); g.arc(MARK.x, MARK.y, 150 - cfg.rim / 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
+        g.strokeStyle = INK; g.lineWidth = cfg.rim; g.stroke();
+      });
+      alpha(real, () => drawMark(MARK.x, MARK.y, MARK.size, drift(rings, Math.max(0, w - 0.85), cfg.idleDrift), { res: 1.2 }));
+      kinetic(t, ["Less", "typing."], 960, 720, 14.55, { size: 104, step: 0.1 });
+      kinetic(t, ["More", "yapping."], 960, 840, 14.8, { size: 104, step: 0.1 });
+      kinetic(t, ["Free", "for", "Mac", "·", "yap.primitive8.cc"], 960, 960, 15.15, { size: 34, step: 0.05, color: MUTED, rise: 16, track: -0.005 });
     });
   }
 
+  // ---------- The edit ----------
+  function frame(t) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1; g.filter = "none";
+    g.fillStyle = PAPER; g.fillRect(0, 0, W, H);
+    if (t < 2.62) scene0(t);
+    if (t >= 2.42 && t < 5.45) alpha(easeOut(prog(t, 2.42, 2.75)), () => scene1(t));
+    if (t >= 5.15 && t < 8.55) scene2(t);
+    if (t >= 8.3 && t < 11.7) scene3(t);
+    if (t >= 11.45 && t < 14.3) scene4(t);
+    if (t >= 13.7) scene5(t);
+  }
+  // Motion blur on the fast moves: several moments inside one frame's shutter, averaged.
+  const BLUR = [[1.95, 2.62], [5.02, 5.58], [5.25, 6.12], [8.17, 8.72], [11.45, 12.1], [13.7, 14.35]];
+  const acc = document.createElement("canvas"); acc.width = W; acc.height = H;
+  const accCtx = acc.getContext("2d");
   function draw(t) {
     t = clamp(t, 0, DUR);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
-    if (t < 2.45) intro(t);
-    if (t >= 2.4 && t < 14.05) header(t);
-    if (t >= 2.4 && t < 6.05) dictation(t);
-    if (t >= 6.0 && t < 9.25) recording(t);
-    if (t >= 9.2 && t < 12.45) meeting(t);
-    if (t >= 12.4 && t < 14.05) privacy(t);
-    if (t >= 14.0) endCard(t);
+    const fast = BLUR.some(([a, b]) => t >= a && t <= b);
+    if (!fast) { g = main; frame(t); return; }
+    const n = 7, shutter = 0.55 / FPS;
+    main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = 1; main.filter = "none";
+    for (let i = 0; i < n; i++) {
+      g = accCtx;
+      frame(t + shutter * (i / (n - 1) - 0.5));
+      main.globalAlpha = 1 / (i + 1);
+      main.drawImage(acc, 0, 0);
+    }
+    main.globalAlpha = 1;
+    g = main;
   }
 
   // ---------- Preview ----------
@@ -475,7 +674,7 @@
   let playing = true, t0 = performance.now(), cur = Number(new URLSearchParams(location.search).get("t")) || 0;
   let exporting = false;
   function tick(now) {
-    if (playing && !exporting) { cur = ((now - t0) / 1000) % DUR; }
+    if (playing && !exporting) cur = ((now - t0) / 1000) % DUR;
     if (!exporting) { draw(cur); $("scrub").value = cur; $("time").textContent = cur.toFixed(2); }
     requestAnimationFrame(tick);
   }
@@ -486,17 +685,16 @@
   // ---------- Export ----------
   async function save(name, blob) {
     const r = await fetch(`out/${name}`, { method: "PUT", body: blob });
-    if (!r.ok) throw new Error(`Saving ${name} failed (${r.status}). Is serve.py running?`);
-    return name;
+    if (!r.ok) throw new Error(`Saving ${name} failed (${r.status}). Is serve.mjs running?`);
   }
-  async function exportFilm() {
+  async function exportFilm(name = "yap-launch-v2") {
     if (exporting) return;
     exporting = true;
     const status = (s) => { $("status").textContent = s; };
     try {
       let config = null;
       for (const codec of ["avc1.640033", "avc1.640032", "avc1.640028", "avc1.4d0034"]) {
-        const c = { codec, width: W, height: H, bitrate: 16_000_000, framerate: FPS, avc: { format: "avc" } };
+        const c = { codec, width: W, height: H, bitrate: 20_000_000, framerate: FPS, avc: { format: "avc" } };
         try { if ((await VideoEncoder.isConfigSupported(c)).supported) { config = c; break; } } catch (_) {}
       }
       if (!config) throw new Error("This browser can't encode H.264");
@@ -512,15 +710,14 @@
         enc.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
         frame.close();
         if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
-        if (i % 15 === 0) { status(`Rendering ${Math.round(i / total * 100)}%`); await new Promise((r) => setTimeout(r, 0)); }
+        if (i % 10 === 0) { status(`Rendering ${Math.round(i / total * 100)}%`); await new Promise((r) => setTimeout(r, 0)); }
       }
       await enc.flush(); enc.close(); muxer.finalize();
       const mp4 = new Blob([muxer.target.buffer], { type: "video/mp4" });
-      await save("yap-launch.mp4", mp4);
-      draw(15.4);
-      const png = await new Promise((r) => canvas.toBlob(r, "image/png"));
-      await save("yap-launch-poster.png", png);
-      status(`Saved out/yap-launch.mp4 (${(mp4.size / 1e6).toFixed(1)} MB) and the poster`);
+      await save(`${name}.mp4`, mp4);
+      draw(15.6);
+      await save(`${name}-poster.png`, await new Promise((r) => canvas.toBlob(r, "image/png")));
+      status(`Saved out/${name}.mp4 (${(mp4.size / 1e6).toFixed(1)} MB) and the poster`);
       window.exportResult = { ok: true, bytes: mp4.size };
     } catch (e) {
       status(e.message || String(e));
@@ -529,7 +726,7 @@
       exporting = false;
     }
   }
-  $("export").onclick = exportFilm;
+  $("export").onclick = () => exportFilm();
   window.exportFilm = exportFilm;
 
   Promise.all([document.fonts.load(font(88, 500)), document.fonts.load(font(40, 600)), document.fonts.load(font(28, 500, "Geist Mono"))])
