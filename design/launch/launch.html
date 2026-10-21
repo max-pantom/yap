@@ -21,6 +21,7 @@
 </head>
 <body>
 <canvas id="film" width="1920" height="1080"></canvas>
+<audio id="sfx" src="audio/sfx.wav" preload="auto"></audio>
 <div class="bar">
   <button id="play">Pause</button>
   <input id="scrub" type="range" min="0" max="16" step="0.01" value="0" aria-label="Time">
@@ -230,21 +231,60 @@
   }
 
   // ---------- Reusable pieces ----------
-  function flowBar(t, cx, cy, s, { listen = 1, think = 0, res = 1 } = {}) {
-    // The black pill with the mark and a live waveform, like the real Flow bar.
-    const w = mix(330, 112, easeInOut(think)) * s, h = 76 * s;
-    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "#0b0b0c");
-    const mx = think > 0 ? mix(cx - 112 * s, cx, easeInOut(think)) : cx - 112 * s;
-    drawMark(mx, cy, 48 * s, think > 0 ? loopRings(t * 3.2) : loopRings(0.4 + t * 1.7), { ink: "#ffffff", res: res * 2 });
-    const bars = 14, on = listen * (1 - easeInOut(think));
-    for (let i = 0; i < bars; i++) {
-      const v = (0.35 + 0.65 * Math.max(0, Math.sin(t * 13 + i * 0.35))) * (Math.sin(t * 2.3 + 0.6) > -0.8 ? 1 : 0.35);
-      const shape = 0.35 + 0.65 * Math.sin(Math.PI * (i + 0.5) / bars);
-      const bh = (10 + 34 * v * (0.45 + 0.55 * Math.abs(Math.sin(t * 9 + i * 1.3))) * shape) * on * s;
-      if (bh < 1) continue;
-      rr(cx - 62 * s + i * 13 * s, cy - bh / 2, 6 * s, bh, 3 * s, "#ffffff");
+  // The Flow bar, drawn to the app's own spec (FlowBar.swift) at scale S (points → pixels): a 146×36 listening
+  // capsule (black 90%, a 1 pt top-lit border, soft shadow) holding the 20 pt mark and 13 bars of 3 pt over 86 pt,
+  // newest sound in the centre flowing outward; 56×32 while thinking, with just the mark.
+  const SYS = "system-ui, -apple-system, sans-serif";
+  const level = (tt) => {                              // a voice: syllables with short gaps between words
+    const syl = Math.max(0, Math.sin(tt * 12.5)) ** 0.7;
+    const word = Math.sin(tt * 2.3 + 0.6) > -0.6 ? 1 : 0.15;
+    return clamp((0.08 + 0.92 * syl * word) * (0.65 + 0.35 * Math.sin(tt * 5.3)));
+  };
+  const flowMarkX = (cx, S, think) => cx - (mix(115, 20, think) / 2 - 10) * S;
+  function flowBar(t, cx, cy, S, { think = 0, res = 1, markAlpha = 1, barsAlpha = 1 } = {}) {
+    const k = easeInOut(think);
+    const w = mix(146, 56, k) * S, h = mix(36, 32, k) * S;
+    g.save();
+    g.shadowColor = "rgba(0,0,0,0.35)"; g.shadowBlur = 10 * S; g.shadowOffsetY = 3 * S;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "rgba(0,0,0,0.9)");
+    g.restore();
+    const border = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+    border.addColorStop(0, "rgba(255,255,255,0.2)"); border.addColorStop(1, "rgba(255,255,255,0.05)");
+    rr(cx - w / 2 + 0.5 * S, cy - h / 2 + 0.5 * S, w - S, h - S, (h - S) / 2, null, border, S);
+    alpha(markAlpha, () => drawMark(flowMarkX(cx, S, k), cy, 20 * S, k > 0 ? loopRings(t * 2.6) : loopRings(0.3 + t * (0.6 + 2.2 * level(t))), { ink: "#ffffff", res: res * 2 }));
+    const on = (1 - k) * barsAlpha;
+    if (on <= 0.01) return;
+    const ww = 86 * S, x0 = flowMarkX(cx, S, k) + (10 + 9) * S, count = 13, mid = 6, barW = 3 * S;
+    const gap = (ww - barW * count) / (count - 1);
+    for (let i = 0; i < count; i++) {
+      const d = Math.abs(i - mid);
+      const sample = level(t - d / 30);
+      const env = 1 - (d * d) / (mid * mid) * 0.65;
+      const loud = sample * 1.6 / (sample * 1.6 + 0.45) * 1.25;
+      const bh = Math.max(3, 3 + 21 * Math.min(1, loud) * env) * S;
+      alpha(on * (0.45 + 0.55 * Math.min(1, sample * 2.5)), () => rr(x0 + i * (barW + gap), cy - bh / 2, barW, bh, barW / 2, "#ffffff"));
     }
   }
+  /** The live words above the pill: 12.5 pt medium, white 92%, on black 80% with an 11 pt corner. */
+  function flowBubble(S, cx, pillTop, width) {
+    const h = (12.5 * 1.25 + 14) * S, w = width + 24 * S;
+    rr(cx - w / 2, pillTop - 8 * S - h, w, h, 11 * S, "rgba(0,0,0,0.8)");
+    return pillTop - 8 * S - h / 2 + 12.5 * 0.36 * S;   // text baseline
+  }
+  /** A notice capsule ("Pasted · also on your clipboard"), black 88% with a hairline. */
+  function flowNotice(S, cx, cy, text) {
+    const tw = measureSys(text, 12.5 * S), w = tw + (14 * 2 + 12 + 8) * S, h = (12.5 * 1.25 + 16) * S;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "rgba(0,0,0,0.88)", "rgba(255,255,255,0.12)", S);
+    const ix = cx - w / 2 + 14 * S + 6 * S;
+    g.beginPath(); g.arc(ix, cy, 6 * S, 0, Math.PI * 2); g.fillStyle = "#fff"; g.fill();
+    check(ix, cy, 0.42 * S, "#000");
+    sysTxt(text, ix + 14 * S, cy + 12.5 * 0.36 * S, 12.5 * S, "#fff");
+  }
+  function sysTxt(s, x, y, size, color, align = "left", weight = 500) {
+    g.font = `${weight} ${size}px ${SYS}`; g.letterSpacing = "0px";
+    g.fillStyle = color; g.textAlign = align; g.textBaseline = "alphabetic"; g.fillText(s, x, y);
+  }
+  function measureSys(s, size, weight = 500) { g.font = `${weight} ${size}px ${SYS}`; g.letterSpacing = "0px"; return g.measureText(s).width; }
   function windowChrome(w, h, title) {
     rr(0, 0, w, h, 26, PAPER, "#e6e6ea", 2);
     for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(34 + i * 24, 32, 7, 0, Math.PI * 2); g.fillStyle = "#dcdce1"; g.fill(); }
@@ -261,7 +301,7 @@
   // ---------- Scene 0 · "What if you could ▢ just say it?" (0 – 2.6) ----------
   const S0_WORDS = ["What", "if", "you", "could", null, "just", "say", "it?"];
   const S0_TIMES = [0.12, 0.34, 0.54, 0.74, 0.98, 1.26, 1.44, 1.62];
-  const S0_SIZE = 76, PILL_H = 80, PILL_S = PILL_H / 76, PILL_W = 330 * PILL_S;
+  const S0_SIZE = 76, PILL_S = 2.2, PILL_H = 36 * PILL_S, PILL_W = 146 * PILL_S;
   function s0Layout() {
     const sp = measure(" ", S0_SIZE) * 1.15;
     let x = 0; const out = [];
@@ -279,7 +319,7 @@
       const prevC = (L[0].x + L[i - 1].x + L[i - 1].width) / 2, c = (L[0].x + L[i].x + L[i].width) / 2;
       cx += (c - prevC) * easeOut(prog(t, S0_TIMES[i], S0_TIMES[i] + 0.55));
     }
-    const pill = L[4], markX = pill.x + PILL_W / 2 - 112 * PILL_S, markY = -26;
+    const pill = L[4], markX = flowMarkX(pill.x + PILL_W / 2, PILL_S, 0), markY = -26;
     const dive = easeIn(prog(t, 2.0, 2.58));
     const zoom = mix(1, 13, dive);
     const camX = mix(cx, markX, easeInOut(prog(t, 1.9, 2.4)));
@@ -294,7 +334,7 @@
           const p = backOut(prog(t, S0_TIMES[i], S0_TIMES[i] + 0.5));
           if (p <= 0) return;
           g.save(); g.translate(it.x + PILL_W / 2, -26); g.scale(p, p);
-          flowBar(t, 0, 0, PILL_S, { listen: 1, res: zoom });
+          flowBar(t, 0, 0, PILL_S, { res: zoom });
           g.restore();
         }
       });
@@ -310,16 +350,16 @@
     return layer("chat", 900, 470, 2, () => {
       windowChrome(900, 470, "Messages · #launch");
       rr(36, 92, 54, 54, 27, "#d4d4da");
-      txt("Maya", 108, 112, { size: 24, weight: 600, track: 0 });
-      txt("When do we ship 1.1?", 108, 142, { size: 28, color: "rgba(0,0,0,0.75)", track: -0.01 });
+      sysTxt("Maya", 108, 112, 23, INK, "left", 600);
+      sysTxt("When do we ship 1.1?", 108, 142, 26, "rgba(0,0,0,0.78)");
       const landed = easeOut(prog(u, 2.12, 2.3));
       alpha(landed, () => {
         rr(36, 186, 54, 54, 27, INK);
-        txt("You", 108, 206, { size: 24, weight: 600, track: 0 });
-        txt("Ship it Thursday at 4.", 108, 236, { size: 28, color: "rgba(0,0,0,0.75)", track: -0.01 });
+        sysTxt("You", 108, 206, 23, INK, "left", 600);
+        sysTxt("Ship it Thursday at 4.", 108, 236, 26, "rgba(0,0,0,0.78)");
       });
       rr(30, 366, 840, 76, 18, PAPER, "#dadade", 2);
-      txt("Message #launch", 60, 414, { size: 27, color: "rgba(0,0,0,0.32)", track: -0.01 });
+      sysTxt("Message #launch", 60, 414, 26, "rgba(0,0,0,0.32)");
       if (Math.floor(u * 2.2) % 2 === 0) rr(58, 384, 3, 40, 1.5, INK);
     });
   }
@@ -339,27 +379,29 @@
       // The Flow bar listens, thinks, then says it's pasted.
       const fx = 960, fy = 860;
       const think = prog(u, 1.3, 1.6), done = prog(u, 1.95, 2.25);
-      if (done < 1) alpha(1 - easeInOut(done), () => flowBar(t, fx, fy, 1, { listen: easeOut(prog(u, 0.1, 0.35)), think }));
-      alpha(easeOut(done) * (1 - easeInOut(prog(u, 2.75, 3.0))), () => {
-        const tw = measure("Pasted · also on your clipboard", 27, 500, "Geist", -0.01) + 110;
-        rr(fx - tw / 2, fy - 38, tw, 76, 38, "#0b0b0c");
-        g.beginPath(); g.arc(fx - tw / 2 + 44, fy, 15, 0, Math.PI * 2); g.fillStyle = "#fff"; g.fill();
-        check(fx - tw / 2 + 44, fy, 1, "#0b0b0c");
-        txt("Pasted · also on your clipboard", fx - tw / 2 + 76, fy + 9, { size: 27, color: "#fff", track: -0.01 });
+      const FS = 2;                                   // the Flow bar at 2× its point size
+      if (done < 1) alpha(1 - easeInOut(done), () => {
+        const p = backOut(prog(u, 0.05, 0.4));
+        g.save(); g.translate(fx, fy); g.scale(p, p); flowBar(t, 0, 0, FS, { think }); g.restore();
       });
+      alpha(easeOut(done) * (1 - easeInOut(prog(u, 2.75, 3.0))), () => flowNotice(FS, fx, fy, "Pasted · also on your clipboard"));
       // The words: typed raw, cleaned up in place, then flown into the message.
-      const size = 34, sp = measure(" ", size) * 1.1, by = 760;
-      const rawW = RAW.map((w) => measure(w, size)), cleanW = CLEAN.map((w) => (w ? measure(w, size) : 0));
+      const size = 12.5 * FS, sp = measureSys(" ", size), pillTop = fy - 18 * FS;
+      const by = pillTop - 8 * FS - (12.5 * 1.25 + 14) * FS / 2 + 12.5 * 0.36 * FS;
+      const rawW = RAW.map((w) => measureSys(w, size)), cleanW = CLEAN.map((w) => (w ? measureSys(w, size) : 0));
       const rawTotal = rawW.reduce((a, b) => a + b, 0) + sp * (RAW.length - 1);
       const kept = CLEAN.filter(Boolean).length, cleanTotal = cleanW.reduce((a, b) => a + b, 0) + sp * (kept - 1);
       const clean = easeInOut(prog(u, 1.15, 1.6));
       const fly = easeInOut(prog(u, 1.75, 2.2));
       const bubbleA = easeOut(prog(u, 0.25, 0.45)) * (1 - easeOut(prog(u, 1.7, 1.9)));
-      const bw = mix(rawTotal, cleanTotal, clean) + 56;
-      alpha(bubbleA, () => rr(960 - bw / 2, by - 50, bw, 72, 18, "#2a2a2d"));
+      // The box grows with the words as they're heard, like the app's live text.
+      let heard = 0;
+      RAW.forEach((w, i) => { const p = easeOut(prog(u, 0.3 + i * 0.1, 0.42 + i * 0.1)); heard += (rawW[i] + (i ? sp : 0)) * p; });
+      const boxW = clean > 0 ? mix(rawTotal, cleanTotal, clean) : Math.max(heard, rawW[0] * 0.4);
+      alpha(bubbleA, () => flowBubble(FS, 960, pillTop, boxW));
       const [tx, ty, ts] = project(CHAT.x, CHAT.y, CHAT.w, CHAT.h, yaw, 108, 236);
-      const tScale = (28 / size) * ts;
-      let rx = 960 - rawTotal / 2, cxp = 960 - cleanTotal / 2;
+      const tScale = (26 / size) * ts;
+      let rx = 960 - rawTotal / 2 + (clean > 0 ? 0 : (rawTotal - boxW) / 2), cxp = 960 - cleanTotal / 2;   // centred, like the app
       RAW.forEach((w, i) => {
         const shown = prog(u, 0.3 + i * 0.1, 0.42 + i * 0.1);
         const gone = CLEAN[i] === null;
@@ -371,13 +413,14 @@
           const f = easeIn(prog(u, 1.1, 1.45));
           alpha(easeOut(shown) * (1 - f), () => {
             g.save(); g.translate(x0, by + f * 60); g.rotate(f * 0.25 * (i % 2 ? 1 : -1));
-            txt(w, 0, 0, { size, color: "#ff8a8c", track: -0.01 }); g.restore();
+            const r = easeOut(prog(u, 0.98, 1.12));      // only marked once the cleanup catches it
+            sysTxt(w, 0, 0, size, `rgba(255,${Math.round(mix(255, 138, r))},${Math.round(mix(255, 140, r))},0.92)`); g.restore();
           });
           return;
         }
         const x = mix(x0, x1, clean);
         const word = clean > 0.5 ? CLEAN[i] : w;
-        const color = fly > 0 ? `rgba(${Math.round(mix(255, 0, fly))},${Math.round(mix(255, 0, fly))},${Math.round(mix(255, 0, fly))},1)` : "#fff";
+        const c = Math.round(mix(255, 0, fly)), color = `rgba(${c},${c},${c},${mix(0.92, 0.78, fly)})`;
         // Fly along a curve up into the chat window.
         const start = [x, by], end = [tx + (x1 - (960 - cleanTotal / 2)) * tScale, ty];
         const ctrl = [mix(start[0], end[0], 0.5), Math.min(start[1], end[1]) - 140];
@@ -386,7 +429,7 @@
         const sc = mix(1, tScale, fly);
         alpha(easeOut(shown) * (1 - easeOut(prog(u, 2.14, 2.3))), () => {
           g.save(); g.translate(px, py); g.scale(sc, sc);
-          txt(word, 0, 0, { size, color, track: -0.01 }); g.restore();
+          sysTxt(word, 0, 0, size, color); g.restore();
         });
       });
     }, { tx: mix(0, -2700, whip) });
@@ -569,7 +612,7 @@
     if (!thumbs) makeThumbs();
     const v = t - 11.45;
     const shrink = easeInOut(prog(v, 0, 0.6));
-    const gather = easeInOut(prog(t, 13.7, 14.25));
+    const gather = easeInOut(prog(t, 13.42, 13.8));
     camera(t, 960, 500, mix(1, 1.05, prog(v, 0.5, 2.6)), 0, () => {
       [0, 1, 2].forEach((i) => {            // meeting notes last, so the middle card sits on top
         const thumb = thumbs[i];
@@ -589,51 +632,51 @@
           const [sx0, sy0, sw0, sh0] = CROP[i]; g.drawImage(thumb, sx0, sy0, sw0, sh0, 0, 0, SLOT.w, SLOT.h); g.restore();
           rr(1, 1, SLOT.w - 2, SLOT.h - 2, 27, null, "rgba(0,0,0,0.08)", 2);
         });
-        if (gather > 0) return;   // scene 5 takes the cards from here
-        alpha(fromFull ? 1 : enter, () => drawCard(card, x, y + bob, SLOT.w * s, SLOT.h * s, yaw, { shadow: 0.14 * (fromFull ? shrink : 1) }));
+        if (fromFull && gather > 0) {
+          // The meeting card folds down into the Flow bar's capsule: Yap itself takes over the ending.
+          const cw = mix(SLOT.w, 146 * 2, gather), ch = mix(SLOT.h, 36 * 2, gather);
+          const cx = 960, cy = mix(y + bob, 520, gather), rad = mix(28, ch / 2, gather);
+          g.save(); g.beginPath(); g.roundRect(cx - cw / 2, cy - ch / 2, cw, ch, rad); g.clip();
+          g.drawImage(card, cx - cw / 2, cy - ch / 2, cw, ch);
+          g.fillStyle = `rgba(0,0,0,${0.9 * easeIn(gather)})`; g.fillRect(cx - cw / 2, cy - ch / 2, cw, ch);
+          g.restore();
+          return;
+        }
+        const away = easeIn(gather) * (slot === 0 ? -1 : 1);
+        alpha((fromFull ? 1 : enter) * (1 - gather), () => drawCard(card, x + away * 900, y + bob, SLOT.w * s, SLOT.h * s, yaw + away * 0.5, { shadow: 0.14 * (fromFull ? shrink : 1) }));
       });
     });
     alpha(1 - gather, () => kinetic(t, ["No", "account.", "No", "cloud.", "All", "on", "your", "Mac."], 960, 900, 12.2, { size: 58, step: 0.11 }));
   }
 
-  // ---------- Scene 5 · The cards become the mark (13.7 – 16) ----------
-  const MARK = { x: 960, y: 405, size: 300 };
+  // ---------- Scene 5 · Yap becomes the logo (13.8 – 16) ----------
+  // The Flow bar is the last thing standing. Its mark lifts out of the pill and grows into the logo, flowing through
+  // all five keyframes with its liquid joins, then lands and settles.
+  const MARK = { x: 960, y: 400, size: 300 };
+  const LOOP = (cfg.holdMs + cfg.moveMs) / 1000 * (frames.length - 1);
+  const inkAt = (k) => { const v = Math.round(mix(255, 0, k)).toString(16).padStart(2, "0"); return `#${v}${v}${v}`; };
   function scene5(t) {
-    if (!thumbs) makeThumbs();
-    const w = t - 13.7;
-    const gather = easeInOut(prog(w, 0, 0.6));
-    const real = easeInOut(prog(w, 0.5, 0.85));
-    camera(t, 960, 540, mix(1.05, 1, gather) * mix(1, 1.045, prog(w, 0.6, 2.3)), 0, () => {
-      // Three cards fly in, round off into circles and become the mark's three rings; the ball draws around them.
-      const rings = cfg.keys[0], R = 145 * MARK.size / 300;
-      const slots = [0, 2, 1];
-      [0, 1, 2].forEach((i) => {
-        const slot = slots[i];
-        const fx = slotX(slot), fy = 470 + 8 * Math.sin(t * 1.1 + slot * 1.7);
-        const [rx, ry] = rings[i];
-        const tx = MARK.x + rx * MARK.size / 300, ty = MARK.y + ry * MARK.size / 300;
-        const cw = mix(SLOT.w, 2 * R, gather), ch = mix(SLOT.h, 2 * R, gather);
-        const x = mix(fx, tx, gather), y = mix(fy, ty, gather);
-        const rad = mix(28, R, gather);
-        alpha(1 - real, () => {
-          g.save();
-          g.beginPath(); g.roundRect(x - cw / 2, y - ch / 2, cw, ch, rad);
-          alpha(1 - easeOut(prog(w, 0.15, 0.5)), () => {
-            g.save(); g.clip(); const [sx0, sy0, sw0, sh0] = CROP[i]; g.drawImage(thumbs[i], sx0, sy0, sw0, sh0, x - cw / 2, y - ch / 2, cw, ch); g.restore();
-          });
-          g.strokeStyle = `rgba(0,0,0,${mix(0.08, 1, easeOut(prog(w, 0.05, 0.4)))})`; g.lineWidth = mix(2, cfg.stroke, gather); g.stroke();
-          g.restore();
-        });
+    const w = t - 13.8, f = prog(t, 14.0, 14.85), fe = easeInOut(f);
+    camera(t, 960, 500, 1.044 * mix(1, 1.05, easeInOut(prog(w, 0.2, 2.2))), 0, () => {
+      // The pill: comes alive, then lets the mark go and shrinks away to its idle sliver.
+      const gone = easeInOut(prog(t, 14.05, 14.45));
+      alpha(1 - gone, () => {
+        g.save(); g.translate(960, 520); g.scale(mix(1, 0.3, gone), mix(1, 0.25, gone));
+        flowBar(t, 0, 0, 2, { markAlpha: 0, barsAlpha: easeOut(prog(w, 0, 0.15)) * (1 - easeOut(prog(t, 14.0, 14.2))) });
+        g.restore();
       });
-      alpha(1 - real, () => {  // the ball's outline drawing on
-        const p = easeOut(prog(w, 0.3, 0.8));
-        g.beginPath(); g.arc(MARK.x, MARK.y, 150 - cfg.rim / 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p);
-        g.strokeStyle = INK; g.lineWidth = cfg.rim; g.stroke();
-      });
-      alpha(real, () => drawMark(MARK.x, MARK.y, MARK.size, drift(rings, Math.max(0, w - 0.85), cfg.idleDrift), { res: 1.2 }));
-      kinetic(t, ["Less", "typing."], 960, 720, 14.55, { size: 104, step: 0.1 });
-      kinetic(t, ["More", "yapping."], 960, 840, 14.8, { size: 104, step: 0.1 });
-      kinetic(t, ["Free", "for", "Mac", "·", "yap.primitive8.cc"], 960, 960, 15.15, { size: 34, step: 0.05, color: MUTED, rise: 16, track: -0.005 });
+      // The mark: from inside the pill to the logo.
+      const sx = flowMarkX(960, 2, 0), sy = 520;
+      const x = mix(sx, MARK.x, fe), y = mix(sy, MARK.y, easeOut(f) * 0.6 + fe * 0.4);
+      let size = mix(40, MARK.size, fe);
+      const land = t - 14.85;
+      if (land > 0) size *= 1 + 0.045 * Math.exp(-land * 6) * Math.sin(land * 18);   // a little blob-like settle
+      const rings = f < 1 ? (f > 0 ? loopRings(LOOP * fe) : drift(cfg.keys[0], t, 3))
+                          : drift(cfg.keys[0], land, cfg.idleDrift * easeOut(prog(land, 0, 0.8)));
+      drawMark(x, y, size, rings, { ink: inkAt(easeOut(prog(f, 0, 0.3))), res: Math.max(1.1, 90 / size) });
+      kinetic(t, ["Less", "typing."], 960, 720, 14.95, { size: 104, step: 0.1 });
+      kinetic(t, ["More", "yapping."], 960, 840, 15.2, { size: 104, step: 0.1 });
+      kinetic(t, ["Free", "for", "Mac", "·", "yap.primitive8.cc"], 960, 960, 15.45, { size: 34, step: 0.05, color: MUTED, rise: 16, track: -0.005 });
     });
   }
 
@@ -646,11 +689,11 @@
     if (t >= 2.42 && t < 5.45) alpha(easeOut(prog(t, 2.42, 2.75)), () => scene1(t));
     if (t >= 5.15 && t < 8.55) scene2(t);
     if (t >= 8.3 && t < 11.7) scene3(t);
-    if (t >= 11.45 && t < 14.3) scene4(t);
-    if (t >= 13.7) scene5(t);
+    if (t >= 11.45 && t < 13.85) scene4(t);
+    if (t >= 13.8) scene5(t);
   }
   // Motion blur on the fast moves: several moments inside one frame's shutter, averaged.
-  const BLUR = [[1.95, 2.62], [5.02, 5.58], [5.25, 6.12], [8.17, 8.72], [11.45, 12.1], [13.7, 14.35]];
+  const BLUR = [[1.95, 2.62], [5.02, 5.58], [5.25, 6.12], [8.17, 8.72], [11.45, 12.1], [13.42, 13.85]];
   const acc = document.createElement("canvas"); acc.width = W; acc.height = H;
   const accCtx = acc.getContext("2d");
   function draw(t) {
@@ -673,8 +716,13 @@
   const $ = (id) => document.getElementById(id);
   let playing = true, t0 = performance.now(), cur = Number(new URLSearchParams(location.search).get("t")) || 0;
   let exporting = false;
+  const sound = $("sfx");
   function tick(now) {
     if (playing && !exporting) cur = ((now - t0) / 1000) % DUR;
+    if (playing && !exporting && sound.readyState >= 2) {
+      if (sound.paused) sound.play().catch(() => {});
+      if (Math.abs(sound.currentTime - cur) > 0.08) sound.currentTime = cur;
+    } else if (!sound.paused) sound.pause();
     if (!exporting) { draw(cur); $("scrub").value = cur; $("time").textContent = cur.toFixed(2); }
     requestAnimationFrame(tick);
   }
@@ -683,11 +731,18 @@
   window.renderAt = (t) => { playing = false; cur = t; draw(t); };
 
   // ---------- Export ----------
+  async function loadSound() {
+    try {
+      const r = await fetch("audio/sfx.wav", { cache: "no-store" });
+      if (!r.ok) return null;
+      return await new OfflineAudioContext(2, 48000 * DUR, 48000).decodeAudioData(await r.arrayBuffer());
+    } catch (_) { return null; }
+  }
   async function save(name, blob) {
     const r = await fetch(`out/${name}`, { method: "PUT", body: blob });
     if (!r.ok) throw new Error(`Saving ${name} failed (${r.status}). Is serve.mjs running?`);
   }
-  async function exportFilm(name = "yap-launch-v2") {
+  async function exportFilm(name = "yap-launch-v3") {
     if (exporting) return;
     exporting = true;
     const status = (s) => { $("status").textContent = s; };
@@ -698,7 +753,18 @@
         try { if ((await VideoEncoder.isConfigSupported(c)).supported) { config = c; break; } } catch (_) {}
       }
       if (!config) throw new Error("This browser can't encode H.264");
-      const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: "avc", width: W, height: H, frameRate: FPS }, fastStart: "in-memory" });
+      const audio = await loadSound();
+      let aconf = null;
+      if (audio) for (const [codec, mux] of [["mp4a.40.2", "aac"], ["opus", "opus"]]) {
+        const c = { codec, sampleRate: audio.sampleRate, numberOfChannels: 2, bitrate: 192_000 };
+        try { if ((await AudioEncoder.isConfigSupported(c)).supported) { aconf = { c, mux }; break; } } catch (_) {}
+      }
+      const muxer = new Mp4Muxer.Muxer({
+        target: new Mp4Muxer.ArrayBufferTarget(),
+        video: { codec: "avc", width: W, height: H, frameRate: FPS },
+        ...(aconf ? { audio: { codec: aconf.mux, numberOfChannels: 2, sampleRate: audio.sampleRate } } : {}),
+        fastStart: "in-memory",
+      });
       let failure = null;
       const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failure = e; } });
       enc.configure(config);
@@ -712,13 +778,29 @@
         if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
         if (i % 10 === 0) { status(`Rendering ${Math.round(i / total * 100)}%`); await new Promise((r) => setTimeout(r, 0)); }
       }
-      await enc.flush(); enc.close(); muxer.finalize();
+      await enc.flush(); enc.close();
+      if (aconf) {
+        status("Encoding sound");
+        const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => { failure = e; } });
+        aenc.configure(aconf.c);
+        const sr = audio.sampleRate, len = Math.min(audio.length, Math.round(DUR * sr)), step = 4800;
+        const L = audio.getChannelData(0), R = audio.numberOfChannels > 1 ? audio.getChannelData(1) : L;
+        for (let i = 0; i < len; i += step) {
+          const n = Math.min(step, len - i), data = new Float32Array(n * 2);
+          data.set(L.subarray(i, i + n), 0); data.set(R.subarray(i, i + n), n);
+          const ad = new AudioData({ format: "f32-planar", sampleRate: sr, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / sr * 1e6), data });
+          aenc.encode(ad); ad.close();
+        }
+        await aenc.flush(); aenc.close();
+        if (failure) throw failure;
+      }
+      muxer.finalize();
       const mp4 = new Blob([muxer.target.buffer], { type: "video/mp4" });
       await save(`${name}.mp4`, mp4);
       draw(15.6);
       await save(`${name}-poster.png`, await new Promise((r) => canvas.toBlob(r, "image/png")));
-      status(`Saved out/${name}.mp4 (${(mp4.size / 1e6).toFixed(1)} MB) and the poster`);
-      window.exportResult = { ok: true, bytes: mp4.size };
+      status(`Saved out/${name}.mp4 (${(mp4.size / 1e6).toFixed(1)} MB${aconf ? ", with sound" : ", silent"}) and the poster`);
+      window.exportResult = { ok: true, bytes: mp4.size, sound: aconf ? aconf.mux : null };
     } catch (e) {
       status(e.message || String(e));
       window.exportResult = { ok: false, error: e.message || String(e) };

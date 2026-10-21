@@ -12,8 +12,8 @@ cut in the site's feature-card layout.
 | 2.5–5 s | Just say it: "3, no wait," falls away and "Ship it Thursday at 4." flies into the chat |
 | 5–8.4 s | Show, don't tell: 3‑2‑1 flies past the camera, a click, and the auto-zoom is a camera push |
 | 8.4–11.5 s | Every call, noted (new): the transcript lands word by word, action items tick off |
-| 11.5–13.7 s | Pull back to all three as floating cards: "No account. No cloud. All on your Mac." |
-| 13.7–16 s | The cards round off into the mark's rings · "Less typing. More yapping." · yap.primitive8.cc |
+| 11.5–13.8 s | Pull back to all three as floating cards: "No account. No cloud. All on your Mac." |
+| 13.8–16 s | The meeting card folds into the Flow bar; its mark lifts out and grows into the logo through all five keyframes · "Less typing. More yapping." · yap.primitive8.cc |
 
 Every frame is drawn by `draw(t)` in `launch.html`, so the preview and the export are identical.
 
@@ -21,7 +21,8 @@ Every frame is drawn by `draw(t)` in `launch.html`, so the preview and the expor
 node design/launch/serve.mjs     # then open http://127.0.0.1:3010 and press Export MP4
 ```
 
-Export encodes frame by frame (WebCodecs + mp4-muxer) and saves `out/yap-launch-v2.mp4` and a poster frame
-(v1 saves `out/yap-launch.mp4`). The film is silent; add music in your editor of choice.
+Export encodes frame by frame (WebCodecs + mp4-muxer), mixes in `audio/sfx.wav` as AAC, and saves
+`out/yap-launch-v3.mp4` and a poster frame (v1 saves `out/yap-launch.mp4`). The Flow bar is drawn to the app's
+own spec in `FlowBar.swift` at 2×. The sound effects are synthesized by `audio/make_sfx.py` (see `audio/README.md`). The sound effects carry no music; add a track in your editor of choice if you want one.
 
 The Geist fonts in `fonts/` are © Vercel, under the SIL Open Font License 1.1.
