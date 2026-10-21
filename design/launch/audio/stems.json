@@ -1,0 +1,440 @@
+[
+ {
+  "name": "word tick 0.12",
+  "label": "word tick",
+  "t": 0.12,
+  "file": "00.wav"
+ },
+ {
+  "name": "word tick 0.34",
+  "label": "word tick",
+  "t": 0.34,
+  "file": "01.wav"
+ },
+ {
+  "name": "word tick 0.54",
+  "label": "word tick",
+  "t": 0.54,
+  "file": "02.wav"
+ },
+ {
+  "name": "word tick 0.74",
+  "label": "word tick",
+  "t": 0.74,
+  "file": "03.wav"
+ },
+ {
+  "name": "word tick 1.26",
+  "label": "word tick",
+  "t": 1.26,
+  "file": "04.wav"
+ },
+ {
+  "name": "word tick 1.44",
+  "label": "word tick",
+  "t": 1.44,
+  "file": "05.wav"
+ },
+ {
+  "name": "word tick 1.62",
+  "label": "word tick",
+  "t": 1.62,
+  "file": "06.wav"
+ },
+ {
+  "name": "pill pop 0.98",
+  "label": "pill pop",
+  "t": 0.98,
+  "file": "07.wav"
+ },
+ {
+  "name": "dive riser 2.00-2.55",
+  "label": "dive riser 2.00-2.55",
+  "t": 2.0,
+  "file": "08.wav"
+ },
+ {
+  "name": "dive riser tone 2.00-2.55",
+  "label": "dive riser tone 2.00-2.55",
+  "t": 2.0,
+  "file": "09.wav"
+ },
+ {
+  "name": "arrival bloom 2.55",
+  "label": "arrival bloom",
+  "t": 2.55,
+  "file": "10.wav"
+ },
+ {
+  "name": "dictation tick 2.72",
+  "label": "dictation tick",
+  "t": 2.72,
+  "file": "11.wav"
+ },
+ {
+  "name": "dictation tick 2.82",
+  "label": "dictation tick",
+  "t": 2.82,
+  "file": "12.wav"
+ },
+ {
+  "name": "dictation tick 2.92",
+  "label": "dictation tick",
+  "t": 2.92,
+  "file": "13.wav"
+ },
+ {
+  "name": "dictation tick 3.02",
+  "label": "dictation tick",
+  "t": 3.02,
+  "file": "14.wav"
+ },
+ {
+  "name": "dictation tick 3.12",
+  "label": "dictation tick",
+  "t": 3.12,
+  "file": "15.wav"
+ },
+ {
+  "name": "dictation tick 3.22",
+  "label": "dictation tick",
+  "t": 3.22,
+  "file": "16.wav"
+ },
+ {
+  "name": "dictation tick 3.32",
+  "label": "dictation tick",
+  "t": 3.32,
+  "file": "17.wav"
+ },
+ {
+  "name": "dictation tick 3.42",
+  "label": "dictation tick",
+  "t": 3.42,
+  "file": "18.wav"
+ },
+ {
+  "name": "fall swish 3.50-3.85",
+  "label": "fall swish 3.50-3.85",
+  "t": 3.5,
+  "file": "19.wav"
+ },
+ {
+  "name": "fly-up swish 4.15-4.55",
+  "label": "fly-up swish 4.15-4.55",
+  "t": 4.15,
+  "file": "20.wav"
+ },
+ {
+  "name": "message pop 4.55",
+  "label": "message pop",
+  "t": 4.55,
+  "file": "21.wav"
+ },
+ {
+  "name": "pasted chime a 4.62",
+  "label": "pasted chime a",
+  "t": 4.62,
+  "file": "22.wav"
+ },
+ {
+  "name": "pasted chime b 4.70",
+  "label": "pasted chime b",
+  "t": 4.7,
+  "file": "23.wav"
+ },
+ {
+  "name": "whip pan 5.05-5.40",
+  "label": "whip pan 5.05-5.40",
+  "t": 5.05,
+  "file": "24.wav"
+ },
+ {
+  "name": "count thump 5.27",
+  "label": "count thump",
+  "t": 5.27,
+  "file": "25.wav"
+ },
+ {
+  "name": "count pass 5.27",
+  "label": "count pass",
+  "t": 5.27,
+  "file": "26.wav"
+ },
+ {
+  "name": "count thump 5.57",
+  "label": "count thump",
+  "t": 5.57,
+  "file": "27.wav"
+ },
+ {
+  "name": "count pass 5.57",
+  "label": "count pass",
+  "t": 5.57,
+  "file": "28.wav"
+ },
+ {
+  "name": "count thump 5.87",
+  "label": "count thump",
+  "t": 5.87,
+  "file": "29.wav"
+ },
+ {
+  "name": "count pass 5.87",
+  "label": "count pass",
+  "t": 5.87,
+  "file": "30.wav"
+ },
+ {
+  "name": "record blip a 6.15",
+  "label": "record blip a",
+  "t": 6.15,
+  "file": "31.wav"
+ },
+ {
+  "name": "record blip b 6.21",
+  "label": "record blip b",
+  "t": 6.21,
+  "file": "32.wav"
+ },
+ {
+  "name": "camera bubble pop 6.25",
+  "label": "camera bubble pop",
+  "t": 6.25,
+  "file": "33.wav"
+ },
+ {
+  "name": "mouse click down 7.17",
+  "label": "mouse click down",
+  "t": 7.17,
+  "file": "34.wav"
+ },
+ {
+  "name": "mouse click up 7.235",
+  "label": "mouse click up",
+  "t": 7.235,
+  "file": "35.wav"
+ },
+ {
+  "name": "push-in swell 7.25-7.90",
+  "label": "push-in swell 7.25-7.90",
+  "t": 7.25,
+  "file": "36.wav"
+ },
+ {
+  "name": "whip up 8.20-8.50",
+  "label": "whip up 8.20-8.50",
+  "t": 8.2,
+  "file": "37.wav"
+ },
+ {
+  "name": "slide-in swish 8.65",
+  "label": "slide-in swish",
+  "t": 8.65,
+  "file": "38.wav"
+ },
+ {
+  "name": "slide-in tick 8.70",
+  "label": "slide-in tick",
+  "t": 8.695,
+  "file": "39.wav"
+ },
+ {
+  "name": "slide-in swish 9.20",
+  "label": "slide-in swish",
+  "t": 9.2,
+  "file": "40.wav"
+ },
+ {
+  "name": "slide-in tick 9.24",
+  "label": "slide-in tick",
+  "t": 9.245,
+  "file": "41.wav"
+ },
+ {
+  "name": "slide-in swish 9.75",
+  "label": "slide-in swish",
+  "t": 9.75,
+  "file": "42.wav"
+ },
+ {
+  "name": "slide-in tick 9.79",
+  "label": "slide-in tick",
+  "t": 9.795,
+  "file": "43.wav"
+ },
+ {
+  "name": "action pop 10.35",
+  "label": "action pop",
+  "t": 10.35,
+  "file": "44.wav"
+ },
+ {
+  "name": "action pop 10.51",
+  "label": "action pop",
+  "t": 10.51,
+  "file": "45.wav"
+ },
+ {
+  "name": "check click 11.00",
+  "label": "check click",
+  "t": 11.0,
+  "file": "46.wav"
+ },
+ {
+  "name": "check click 11.25",
+  "label": "check click",
+  "t": 11.25,
+  "file": "47.wav"
+ },
+ {
+  "name": "pull-back swell 11.45-12.05",
+  "label": "pull-back swell 11.45-12.05",
+  "t": 11.45,
+  "file": "48.wav"
+ },
+ {
+  "name": "end-card tick 12.20",
+  "label": "end-card tick",
+  "t": 12.2,
+  "file": "49.wav"
+ },
+ {
+  "name": "end-card tick 12.31",
+  "label": "end-card tick",
+  "t": 12.31,
+  "file": "50.wav"
+ },
+ {
+  "name": "end-card tick 12.42",
+  "label": "end-card tick",
+  "t": 12.42,
+  "file": "51.wav"
+ },
+ {
+  "name": "end-card tick 12.53",
+  "label": "end-card tick",
+  "t": 12.53,
+  "file": "52.wav"
+ },
+ {
+  "name": "end-card tick 12.64",
+  "label": "end-card tick",
+  "t": 12.64,
+  "file": "53.wav"
+ },
+ {
+  "name": "end-card tick 12.75",
+  "label": "end-card tick",
+  "t": 12.75,
+  "file": "54.wav"
+ },
+ {
+  "name": "end-card tick 12.86",
+  "label": "end-card tick",
+  "t": 12.86,
+  "file": "55.wav"
+ },
+ {
+  "name": "end-card tick 12.97",
+  "label": "end-card tick",
+  "t": 12.97,
+  "file": "56.wav"
+ },
+ {
+  "name": "pill pop 13.75",
+  "label": "pill pop",
+  "t": 13.75,
+  "file": "57.wav"
+ },
+ {
+  "name": "morph bloop 14.00",
+  "label": "morph bloop",
+  "t": 14.0,
+  "file": "58.wav"
+ },
+ {
+  "name": "morph bloop 14.12",
+  "label": "morph bloop",
+  "t": 14.12,
+  "file": "59.wav"
+ },
+ {
+  "name": "morph bloop 14.23",
+  "label": "morph bloop",
+  "t": 14.23,
+  "file": "60.wav"
+ },
+ {
+  "name": "morph bloop 14.33",
+  "label": "morph bloop",
+  "t": 14.33,
+  "file": "61.wav"
+ },
+ {
+  "name": "morph bloop 14.42",
+  "label": "morph bloop",
+  "t": 14.42,
+  "file": "62.wav"
+ },
+ {
+  "name": "morph bloop 14.50",
+  "label": "morph bloop",
+  "t": 14.5,
+  "file": "63.wav"
+ },
+ {
+  "name": "morph bloop 14.58",
+  "label": "morph bloop",
+  "t": 14.58,
+  "file": "64.wav"
+ },
+ {
+  "name": "morph bloop 14.65",
+  "label": "morph bloop",
+  "t": 14.65,
+  "file": "65.wav"
+ },
+ {
+  "name": "morph bloop 14.71",
+  "label": "morph bloop",
+  "t": 14.71,
+  "file": "66.wav"
+ },
+ {
+  "name": "morph bloop 14.77",
+  "label": "morph bloop",
+  "t": 14.77,
+  "file": "67.wav"
+ },
+ {
+  "name": "morph glide 14.00-14.85",
+  "label": "morph glide 14.00-14.85",
+  "t": 14.0,
+  "file": "68.wav"
+ },
+ {
+  "name": "brand sting 14.85",
+  "label": "brand sting",
+  "t": 14.85,
+  "file": "69.wav"
+ },
+ {
+  "name": "tagline tick 14.95",
+  "label": "tagline tick",
+  "t": 14.95,
+  "file": "70.wav"
+ },
+ {
+  "name": "tagline tick 15.20",
+  "label": "tagline tick",
+  "t": 15.2,
+  "file": "71.wav"
+ },
+ {
+  "name": "room tone",
+  "label": "room tone",
+  "t": 0.0,
+  "file": "bed.wav"
+ }
+]

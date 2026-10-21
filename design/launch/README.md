@@ -26,3 +26,15 @@ Export encodes frame by frame (WebCodecs + mp4-muxer), mixes in `audio/mix.wav` 
 own spec in `FlowBar.swift` at 2×. The sound effects are synthesized by `audio/make_sfx.py` (see `audio/README.md`). The soundtrack is a small synthesized music bed (A major, 100 bpm) under the effects; stems are `audio/music.wav` and `audio/sfx.wav`.
 
 The Geist fonts in `fonts/` are © Vercel, under the SIL Open Font License 1.1.
+
+## Sound mixer
+
+```bash
+node design/launch/serve.mjs     # then open http://127.0.0.1:3010/sound
+```
+
+`sound.html` plays the film with the music and every effect as separate tracks (`audio/stems/`, listed in
+`audio/stems.json`, written by `make_sfx.py`). Set the master, music and effects volume, each sound on its own,
+and the music per scene; mute or solo anything; watch the peak and loudness. **Save soundtrack** writes
+`audio/mix.wav` and `audio/mix-settings.json` (reloaded next time). **Save and render the film** also re-exports
+`out/yap-launch-v3.mp4` with it.

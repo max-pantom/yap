@@ -544,6 +544,43 @@ for i in range(NS):
     mixL[i] = soft_limit(mixL[i])
     mixR[i] = soft_limit(mixR[i])
 
+# ----------------------------------------------------------------- stems
+# Every element as its own short file at its final level (before the safety limiter), plus a manifest, so
+# sound.html can set each sound's volume exactly. Summing the stems at their times gives this mix.
+import json
+import re
+STEMS = os.path.join(HERE, "stems")
+os.makedirs(STEMS, exist_ok=True)
+for f in os.listdir(STEMS):
+    if f.endswith(".wav"):
+        os.remove(os.path.join(STEMS, f))
+
+
+def write_stem(path, L, R, g):
+    pcm = bytearray()
+    for a, b in zip(L, R):
+        pcm += struct.pack("<hh", int(round(max(-1.0, min(1.0, a * g)) * 32767)),
+                           int(round(max(-1.0, min(1.0, b * g)) * 32767)))
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(bytes(pcm))
+
+
+manifest = []
+for k, (name, t, i0, L, R) in enumerate(stems):
+    file = "%02d.wav" % k
+    write_stem(os.path.join(STEMS, file), L, R, GLOBAL * stem_trim(name))
+    label = re.sub(r"\s+[\d.]+$", "", name)
+    manifest.append({"name": name, "label": label, "t": round(i0 / SR, 6), "file": file})
+bf = [smooth(i / SR / 0.5) * smooth((DUR - i / SR) / 0.6) * bed_gain for i in range(NS)]
+write_stem(os.path.join(STEMS, "bed.wav"), [a * b for a, b in zip(bedL, bf)], [a * b for a, b in zip(bedR, bf)], 1.0)
+manifest.append({"name": "room tone", "label": "room tone", "t": 0.0, "file": "bed.wav"})
+with open(os.path.join(HERE, "stems.json"), "w") as fh:
+    json.dump(manifest, fh, indent=1)
+print("stems: %d files + room tone -> stems/, manifest stems.json" % (len(manifest) - 1))
+
 # ----------------------------------------------------------------- write
 pcm = bytearray()
 for i in range(NS):

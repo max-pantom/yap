@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yap Sound Mixer</title>
+<style>
+  @font-face { font-family: "Geist"; src: url(fonts/geist.woff2) format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url(fonts/geist-mono.woff2) format("woff2"); font-weight: 100 900; }
+  :root {
+    color-scheme: dark;
+    --bg: #111113; --panel: #1a1a1d; --line: #2a2a2e; --text: #f2f2f4; --muted: #8e8e94; --accent: #ffffff;
+    --music: #7aa7ff; --sfx: #f2f2f4; --red: #ff5a5c; --ok: #4cd07d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Geist", system-ui, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 16px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+  video { width: 100%; aspect-ratio: 16 / 9; background: #fff; border-radius: 10px; display: block; }
+  .transport { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  button { font: inherit; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: #232327; color: var(--text); cursor: pointer; }
+  button:hover { border-color: #3d3d43; }
+  button.solid { background: #fff; color: #000; border-color: #fff; font-weight: 600; }
+  button.small { padding: 3px 9px; font-size: 12px; }
+  button.on { background: #fff; color: #000; border-color: #fff; }
+  button.mute.on { background: var(--red); border-color: var(--red); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .time { font-family: "Geist Mono", monospace; color: var(--muted); }
+  #wave { width: 100%; height: 120px; display: block; cursor: pointer; border-radius: 8px; background: #0c0c0e; }
+  .meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .meter { background: #0f0f11; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .meter b { display: block; font: 600 20px "Geist Mono", monospace; }
+  .meter span { color: var(--muted); font-size: 12px; }
+  .warn { color: var(--red); }
+  .row { display: grid; grid-template-columns: 1fr 54px auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row label { display: flex; flex-direction: column; min-width: 0; }
+  .row label small { color: var(--muted); font-size: 12px; }
+  .row .val { font: 500 13px "Geist Mono", monospace; text-align: right; }
+  .row input[type=range] { grid-column: 1 / -1; width: 100%; }
+  .row .btns { display: flex; gap: 6px; }
+  .bus .row { grid-template-columns: 90px 1fr 60px auto; }
+  .bus .row input[type=range] { grid-column: auto; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 18px; }
+  .group { border-top: 1px solid var(--line); padding: 8px 0; }
+  .group .head { display: grid; grid-template-columns: 1fr 54px auto; gap: 8px; align-items: center; }
+  .group .name { font-weight: 500; cursor: pointer; }
+  .group .name:hover { text-decoration: underline; }
+  .group .when { color: var(--muted); font: 12px "Geist Mono", monospace; }
+  .group input[type=range] { width: 100%; margin-top: 4px; }
+  .group details { margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .group details .row { grid-template-columns: 1fr 54px; padding: 4px 0; }
+  .sections .row { grid-template-columns: 1fr 54px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #status { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  input[type=range] { accent-color: #fff; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Yap launch film · sound mixer</h1>
+    <span class="hint">Space plays · click a sound's name to jump to it · double-click a slider to reset it</span>
+  </header>
+
+  <div class="top">
+    <section class="panel">
+      <video id="video" src="out/yap-launch-v3.mp4" muted playsinline preload="auto"></video>
+      <div class="transport">
+        <button id="play" class="solid">Play</button>
+        <button id="restart">From the start</button>
+        <span class="time" id="time">0.00 / 16.00</span>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Levels</h2>
+      <div class="meters">
+        <div class="meter"><span>Peak</span><b id="peak">–</b><span id="peakNote">dBFS</span></div>
+        <div class="meter"><span>Loudness</span><b id="lufs">–</b><span>LUFS (integrated)</span></div>
+        <div class="meter"><span>Loudest at</span><b id="peakAt">–</b><span>seconds</span></div>
+      </div>
+      <p class="hint">Keep the peak under −1 dBFS. Social apps play around −14 LUFS; quieter mixes just get turned up.</p>
+      <div class="bus" style="margin-top:10px">
+        <div class="row"><span>Master</span><input type="range" id="master" min="-24" max="12" step="0.5"><span class="val" id="masterV"></span><span class="btns"><button class="small" id="limiter" title="Soft limiter at −1 dBFS">Limiter</button></span></div>
+        <div class="row"><span style="color:var(--music)">Music</span><input type="range" id="music" min="-36" max="12" step="0.5"><span class="val" id="musicV"></span><span class="btns"><button class="small mute" data-bus="music">Mute</button><button class="small solo" data-bus="music">Solo</button></span></div>
+        <div class="row"><span>Effects</span><input type="range" id="sfx" min="-36" max="12" step="0.5"><span class="val" id="sfxV"></span><span class="btns"><button class="small mute" data-bus="sfx">Mute</button><button class="small solo" data-bus="sfx">Solo</button></span></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <canvas id="wave"></canvas>
+    <p class="hint"><span style="color:var(--music)">Blue</span> is the music, white the effects, each after your settings. Dots mark the sounds.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Effects, one by one</h2>
+    <div class="groups" id="groups"></div>
+  </section>
+
+  <section class="panel sections">
+    <h2>Music, by scene</h2>
+    <div id="sections"></div>
+  </section>
+
+  <section class="panel">
+    <div class="actions">
+      <button id="save" class="solid">Save soundtrack</button>
+      <button id="render">Save and render the film</button>
+      <button id="reset">Reset everything</button>
+      <span id="status">Loading…</span>
+    </div>
+    <p class="hint">Saving writes <code>audio/mix.wav</code> and your settings (<code>audio/mix-settings.json</code>). Rendering re-exports
+      <code>out/yap-launch-v3.mp4</code> with the new soundtrack, then reloads it above.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const SR = 48000, DUR = 16, NS = SR * DUR;
+  const $ = (id) => document.getElementById(id);
+  const dB = (d) => Math.pow(10, d / 20);
+  const ctx = new AudioContext({ sampleRate: SR });
+
+  const SECTIONS = [
+    ["Opening words", 0, 2.55], ["Just say it", 2.55, 5.05], ["Show, don't tell", 5.05, 8.2],
+    ["Every call, noted", 8.2, 11.45], ["All on your Mac", 11.45, 13.75], ["The logo", 13.75, 16],
+  ];
+  // Friendly names for the effects, grouped the way you'd think about them.
+  function groupOf(label, t) {
+    const l = label.replace(/\s+[\d.]+(-[\d.]+)?$/, "");
+    const map = {
+      "dive riser": "Dive through the mark", "dive riser tone": "Dive through the mark", "arrival bloom": "Arrival bloom",
+      "dictation tick": "Dictated words", "fall swish": "Words fall away", "fly-up swish": "Sentence flies into chat",
+      "message pop": "Message sent", "pasted chime a": "Pasted chime", "pasted chime b": "Pasted chime",
+      "whip pan": "Whip pan to recording", "count thump": "Countdown thumps", "count pass": "Countdown whooshes",
+      "record blip a": "Recording starts", "record blip b": "Recording starts", "camera bubble pop": "Camera bubble",
+      "mouse click down": "Mouse click", "mouse click up": "Mouse click", "push-in swell": "Camera push-in",
+      "whip up": "Whip up to meeting", "slide-in swish": "Transcript lines", "slide-in tick": "Transcript lines",
+      "action pop": "Action items", "check click": "Checkboxes", "pull-back swell": "Pull back to cards",
+      "end-card tick": "“No account…” words", "morph bloop": "Logo morph", "morph glide": "Logo morph",
+      "brand sting": "Brand sting", "tagline tick": "Tagline words", "room tone": "Room tone",
+    };
+    if (l === "word tick") return "Opening words";
+    if (l === "pill pop") return t < 5 ? "Flow bar pops in" : "Flow bar at the end";
+    return map[l] || l.replace(/^./, (c) => c.toUpperCase());
+  }
+
+  const DEFAULTS = { master: 0, music: 0, sfx: 0, limiter: true, mute: {}, solo: {}, groups: {}, items: {}, sections: SECTIONS.map(() => 0) };
+  let S = structuredClone(DEFAULTS);
+  let stems = [], music = null, groups = [], mix = null, src = null;
+
+  // ---------- Loading ----------
+  async function decode(url) {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(`Couldn't load ${url}`);
+    return await ctx.decodeAudioData(await r.arrayBuffer());
+  }
+  async function load() {
+    const manifest = await (await fetch("audio/stems.json", { cache: "no-store" })).json();
+    const bufs = await Promise.all(manifest.map((m) => decode("audio/stems/" + m.file)));
+    stems = manifest.map((m, i) => ({ ...m, group: groupOf(m.label, m.t), L: bufs[i].getChannelData(0), R: bufs[i].getChannelData(bufs[i].numberOfChannels > 1 ? 1 : 0) }));
+    const mb = await decode("audio/music.wav");
+    music = { L: mb.getChannelData(0), R: mb.getChannelData(1) };
+    const order = [];
+    for (const s of stems.slice().sort((a, b) => a.t - b.t)) if (!order.includes(s.group)) order.push(s.group);
+    groups = order.map((name) => ({ name, items: stems.filter((s) => s.group === name) }));
+    try {
+      const r = await fetch("audio/mix-settings.json", { cache: "no-store" });
+      if (r.ok) S = { ...structuredClone(DEFAULTS), ...(await r.json()) };
+    } catch (_) {}
+    build();
+    render();
+    $("status").textContent = `${stems.length} sounds and the music loaded`;
+  }
+
+  // ---------- The mix ----------
+  const soloed = () => Object.values(S.solo).some(Boolean);
+  function audible(kind, key) {
+    if (S.mute[kind] || (key && S.mute[key])) return false;
+    if (!soloed()) return true;
+    return !!(S.solo[kind] || (key && S.solo[key]));
+  }
+  function render() {
+    const L = new Float32Array(NS), R = new Float32Array(NS);
+    const mL = new Float32Array(NS), mR = new Float32Array(NS);   // music only, for the picture
+    const anyGroupSolo = groups.some((g) => S.solo["g:" + g.name]);
+    for (const s of stems) {
+      const gk = "g:" + s.group;
+      let on = !S.mute.sfx && !S.mute[gk];
+      if (soloed()) on = on && (S.solo.sfx || S.solo[gk]) && (!anyGroupSolo || S.solo[gk]);
+      if (!on) continue;
+      const g = dB(S.master + S.sfx + (S.groups[s.group] || 0) + (S.items[s.name] || 0));
+      const i0 = Math.round(s.t * SR);
+      for (let k = 0; k < s.L.length && i0 + k < NS; k++) { L[i0 + k] += s.L[k] * g; R[i0 + k] += s.R[k] * g; }
+    }
+    if (audible("music") && !anyGroupSolo) {
+      const base = S.master + S.music, ramp = 0.06 * SR;
+      // A gain curve over the music: each scene at its own level, with short crossfades between them.
+      for (let i = 0; i < NS; i++) {
+        const t = i / SR;
+        let si = SECTIONS.findIndex(([, a, b]) => t >= a && t < b); if (si < 0) si = SECTIONS.length - 1;
+        let d = S.sections[si] || 0;
+        const start = SECTIONS[si][1] * SR;
+        if (si > 0 && i - start < ramp) d = d + ((S.sections[si - 1] || 0) - d) * (1 - (i - start) / ramp);
+        const g = dB(base + d);
+        mL[i] = music.L[i] * g; mR[i] = music.R[i] * g;
+        L[i] += mL[i]; R[i] += mR[i];
+      }
+    }
+    if (S.limiter) { const c = dB(-1); for (let i = 0; i < NS; i++) { L[i] = limit(L[i], c); R[i] = limit(R[i], c); } }
+    mix = { L, R, mL, mR };
+    meters();
+    drawWave();
+    if (playing) startSound(video.currentTime);
+  }
+  function limit(x, c) {
+    const a = Math.abs(x), k = 0.7 * c;
+    if (a <= k) return x;
+    return Math.sign(x) * (k + (c - k) * Math.tanh((a - k) / (c - k)));
+  }
+
+  // ---------- Meters: peak and BS.1770 loudness ----------
+  function biquad(x, b, a) {
+    const y = new Float32Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) {
+      const v = b[0] * x[i] + b[1] * x1 + b[2] * x2 - a[1] * y1 - a[2] * y2;
+      x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v;
+    }
+    return y;
+  }
+  function lufs(L, R) {
+    const k = (x) => biquad(biquad(x, [1.53512485958697, -2.69169618940638, 1.19839281085285], [1, -1.69065929318241, 0.73248077421585]),
+                            [1, -2, 1], [1, -1.99004745483398, 0.99007225036621]);
+    const kl = k(L), kr = k(R), win = 0.4 * SR, hop = 0.1 * SR, blocks = [];
+    for (let s = 0; s + win <= NS; s += hop) {
+      let e = 0; for (let i = s; i < s + win; i++) e += kl[i] * kl[i] + kr[i] * kr[i];
+      blocks.push(e / win);
+    }
+    const loud = (z) => -0.691 + 10 * Math.log10(z);
+    const abs = blocks.filter((z) => loud(z) > -70);
+    if (!abs.length) return -Infinity;
+    const rel = loud(abs.reduce((a, b) => a + b, 0) / abs.length) - 10;
+    const gated = abs.filter((z) => loud(z) > rel);
+    return loud(gated.reduce((a, b) => a + b, 0) / gated.length);
+  }
+  function meters() {
+    let p = 0, at = 0;
+    for (let i = 0; i < NS; i++) { const v = Math.max(Math.abs(mix.L[i]), Math.abs(mix.R[i])); if (v > p) { p = v; at = i; } }
+    const pd = 20 * Math.log10(p || 1e-9);
+    $("peak").textContent = p ? pd.toFixed(1) : "−∞";
+    $("peak").className = pd > -1 ? "warn" : "";
+    $("peakNote").textContent = pd > -1 ? "too hot: turn something down" : "dBFS";
+    $("peakAt").textContent = (at / SR).toFixed(2);
+    const l = lufs(mix.L, mix.R);
+    $("lufs").textContent = isFinite(l) ? l.toFixed(1) : "−∞";
+  }
+
+  // ---------- Waveform ----------
+  // The waveform is drawn once per change into `base`; each frame only adds the playhead.
+  const wave = $("wave"), base = document.createElement("canvas");
+  function drawWave() {
+    const dpr = window.devicePixelRatio || 1, w = wave.clientWidth, h = wave.clientHeight;
+    base.width = wave.width = Math.round(w * dpr); base.height = wave.height = Math.round(h * dpr);
+    const g = base.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    if (mix) {
+      const mid = h / 2 - 8, per = NS / w;
+      const lane = (fn, color) => {
+        g.fillStyle = color;
+        for (let x = 0; x < w; x++) {
+          let m = 0; const a = Math.floor(x * per), b = Math.floor((x + 1) * per);
+          for (let i = a; i < b; i += 6) m = Math.max(m, fn(i));
+          const hh = Math.max(0.5, m * (mid - 4));
+          g.fillRect(x, mid - hh, 1, hh * 2);
+        }
+      };
+      lane((i) => Math.max(Math.abs(mix.mL[i]), Math.abs(mix.mR[i])), "rgba(122,167,255,0.55)");
+      lane((i) => Math.max(Math.abs(mix.L[i] - mix.mL[i]), Math.abs(mix.R[i] - mix.mR[i])), "rgba(242,242,244,0.85)");
+      g.fillStyle = "rgba(255,255,255,0.1)";
+      for (const [, a] of SECTIONS) g.fillRect(a / DUR * w, 0, 1, h);
+      g.fillStyle = "#8e8e94";
+      for (const st of stems) g.fillRect(st.t / DUR * w - 1, h - 10, 2, 6);
+    }
+    paint();
+  }
+  function paint() {
+    const g = wave.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, wave.width, wave.height); g.drawImage(base, 0, 0);
+    const x = (video.currentTime / DUR) * wave.width, dpr = window.devicePixelRatio || 1;
+    g.fillStyle = "#ff5a5c"; g.fillRect(x - dpr, 0, 2 * dpr, wave.height);
+  }
+  function tick() {
+    $("time").textContent = `${video.currentTime.toFixed(2)} / 16.00`;
+    paint();
+    requestAnimationFrame(tick);
+  }
+  wave.addEventListener("click", (e) => {
+    const r = wave.getBoundingClientRect();
+    seek(((e.clientX - r.left) / r.width) * DUR);
+  });
+  window.addEventListener("resize", drawWave);
+
+  // ---------- Playback ----------
+  const video = $("video");
+  let playing = false;
+  function startSound(at) {
+    stopSound();
+    const buf = ctx.createBuffer(2, NS, SR);
+    buf.copyToChannel(mix.L, 0); buf.copyToChannel(mix.R, 1);
+    src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+    src.start(0, Math.min(at, DUR - 0.01));
+  }
+  function stopSound() { if (src) { try { src.stop(); } catch (_) {} src.disconnect(); src = null; } }
+  async function play() {
+    await ctx.resume();
+    if (video.currentTime >= DUR - 0.05) video.currentTime = 0;
+    await video.play().catch(() => {});
+    playing = true; startSound(video.currentTime); $("play").textContent = "Pause";
+  }
+  function pause() { video.pause(); playing = false; stopSound(); $("play").textContent = "Play"; }
+  function seek(t) { video.currentTime = Math.max(0, Math.min(DUR, t)); if (playing) startSound(video.currentTime); drawWave(); }
+  $("play").onclick = () => (playing ? pause() : play());
+  $("restart").onclick = () => { seek(0); if (!playing) play(); };
+  video.addEventListener("ended", pause);
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !["INPUT", "BUTTON"].includes(document.activeElement.tagName)) { e.preventDefault(); playing ? pause() : play(); }
+  });
+
+  // ---------- Controls ----------
+  let pending = 0;
+  function changed() { clearTimeout(pending); pending = setTimeout(render, 90); }
+  const fmt = (v) => (v > 0 ? "+" : "") + Number(v).toFixed(1);
+  function slider(input, out, get, set, def = 0) {
+    input.value = get();
+    out.textContent = fmt(get()) + " dB";
+    input.oninput = () => { set(Number(input.value)); out.textContent = fmt(input.value) + " dB"; changed(); };
+    input.ondblclick = () => { set(def); input.value = def; out.textContent = fmt(def) + " dB"; changed(); };
+  }
+  function toggle(btn, key, kind) {
+    const sync = () => btn.classList.toggle("on", !!S[kind][key]);
+    sync();
+    btn.onclick = () => { S[kind][key] = !S[kind][key]; sync(); changed(); };
+  }
+  function build() {
+    slider($("master"), $("masterV"), () => S.master, (v) => (S.master = v));
+    slider($("music"), $("musicV"), () => S.music, (v) => (S.music = v));
+    slider($("sfx"), $("sfxV"), () => S.sfx, (v) => (S.sfx = v));
+    const lim = $("limiter");
+    const syncLim = () => lim.classList.toggle("on", S.limiter); syncLim();
+    lim.onclick = () => { S.limiter = !S.limiter; syncLim(); changed(); };
+    document.querySelectorAll("button.mute[data-bus]").forEach((b) => toggle(b, b.dataset.bus, "mute"));
+    document.querySelectorAll("button.solo[data-bus]").forEach((b) => toggle(b, b.dataset.bus, "solo"));
+
+    const box = $("groups"); box.innerHTML = "";
+    for (const g of groups) {
+      const times = [...new Set(g.items.map((s) => s.t.toFixed(2)))];
+      const el = document.createElement("div"); el.className = "group";
+      el.innerHTML = `<div class="head"><span><span class="name"></span><br><span class="when"></span></span><span class="val"></span>
+        <span class="btns"><button class="small mute">Mute</button><button class="small solo">Solo</button></span></div>
+        <input type="range" min="-36" max="12" step="0.5" aria-label="">`;
+      el.querySelector(".name").textContent = g.name;
+      el.querySelector(".when").textContent = times.length > 3 ? `${times[0]}–${times[times.length - 1]} s · ${g.items.length} sounds` : `${times.join(", ")} s`;
+      el.querySelector(".name").onclick = () => { seek(Math.max(0, g.items[0].t - 0.6)); if (!playing) play(); };
+      el.querySelector("input").setAttribute("aria-label", g.name + " volume");
+      slider(el.querySelector("input"), el.querySelector(".val"), () => S.groups[g.name] || 0, (v) => (S.groups[g.name] = v));
+      toggle(el.querySelector(".mute"), "g:" + g.name, "mute");
+      toggle(el.querySelector(".solo"), "g:" + g.name, "solo");
+      if (g.items.length > 1) {
+        const d = document.createElement("details");
+        d.innerHTML = "<summary>Each sound</summary>";
+        for (const s of g.items) {
+          const r = document.createElement("div"); r.className = "row";
+          r.innerHTML = `<label><span></span></label><span class="val"></span><input type="range" min="-36" max="12" step="0.5">`;
+          r.querySelector("span").textContent = `${s.label.replace(/\s+[\d.]+(-[\d.]+)?$/, "")} · ${s.t.toFixed(2)} s`;
+          slider(r.querySelector("input"), r.querySelector(".val"), () => S.items[s.name] || 0, (v) => (S.items[s.name] = v));
+          d.appendChild(r);
+        }
+        el.appendChild(d);
+      }
+      box.appendChild(el);
+    }
+    const sec = $("sections"); sec.innerHTML = "";
+    SECTIONS.forEach(([name, a, b], i) => {
+      const r = document.createElement("div"); r.className = "row";
+      r.innerHTML = `<label><span></span><small></small></label><span class="val"></span><input type="range" min="-36" max="12" step="0.5">`;
+      r.querySelector("span").textContent = name;
+      r.querySelector("small").textContent = `${a.toFixed(2)}–${b.toFixed(2)} s`;
+      slider(r.querySelector("input"), r.querySelector(".val"), () => S.sections[i] || 0, (v) => (S.sections[i] = v));
+      sec.appendChild(r);
+    });
+  }
+
+  // ---------- Saving ----------
+  function wav(L, R) {
+    const n = L.length, buf = new ArrayBuffer(44 + n * 4), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true); v.setUint32(24, SR, true);
+    v.setUint32(28, SR * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 4, true);
+    for (let i = 0, o = 44; i < n; i++, o += 4) {
+      v.setInt16(o, Math.round(Math.max(-1, Math.min(1, L[i])) * 32767), true);
+      v.setInt16(o + 2, Math.round(Math.max(-1, Math.min(1, R[i])) * 32767), true);
+    }
+    return new Blob([buf], { type: "audio/wav" });
+  }
+  async function put(path, body) {
+    const r = await fetch(path, { method: "PUT", body });
+    if (!r.ok) throw new Error(`Saving ${path} failed (${r.status})`);
+  }
+  async function save() {
+    clearTimeout(pending); render();
+    await put("audio/mix.wav", wav(mix.L, mix.R));
+    await put("audio/mix-settings.json", new Blob([JSON.stringify(S, null, 1)], { type: "application/json" }));
+  }
+  const busy = (on) => ["save", "render", "reset"].forEach((id) => ($(id).disabled = on));
+  $("save").onclick = async () => {
+    busy(true);
+    try { await save(); $("status").textContent = "Saved audio/mix.wav. Render the film to hear it in the MP4."; }
+    catch (e) { $("status").textContent = e.message; }
+    busy(false);
+  };
+  $("render").onclick = async () => {
+    busy(true); pause();
+    try {
+      $("status").textContent = "Saving the soundtrack…";
+      await save();
+      $("status").textContent = "Rendering the film (about 10 seconds)…";
+      const frame = document.createElement("iframe");
+      frame.style.cssText = "position:fixed;left:-4000px;top:0;width:1280px;height:900px;border:0";
+      frame.src = "launch.html?render=" + Date.now();
+      document.body.appendChild(frame);
+      await new Promise((r) => (frame.onload = r));
+      const w = frame.contentWindow;
+      for (let i = 0; i < 100 && !w.exportFilm; i++) await new Promise((r) => setTimeout(r, 100));
+      await w.document.fonts.ready;
+      await w.exportFilm("yap-launch-v3");
+      const res = w.exportResult;
+      frame.remove();
+      if (!res || !res.ok) throw new Error(res?.error || "Rendering failed");
+      video.src = "out/yap-launch-v3.mp4?" + Date.now();
+      $("status").textContent = `Rendered out/yap-launch-v3.mp4 (${(res.bytes / 1e6).toFixed(1)} MB, ${res.sound ? "with sound" : "silent"}).`;
+    } catch (e) { $("status").textContent = e.message; }
+    busy(false);
+  };
+  $("reset").onclick = () => { S = structuredClone(DEFAULTS); build(); render(); $("status").textContent = "Back to the original mix (not saved yet)."; };
+
+  requestAnimationFrame(tick);
+  load().catch((e) => { $("status").textContent = e.message + ". Open this page through serve.mjs (http://127.0.0.1:3010/sound)."; });
+})();
+</script>
+</body>
+</html>
