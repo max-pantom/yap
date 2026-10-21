@@ -42,6 +42,13 @@
   const canvas = document.getElementById("film");
   const main = canvas.getContext("2d");
   let g = main;                                   // the context everything draws into (swapped for layers)
+  const AVATARS = Object.fromEntries(Object.entries({
+    You: "assets/user-avatar.png",
+    Maya: "assets/maya-avatar.png",
+    Ada: "assets/ada-avatar.png",
+  }).map(([name, src]) => {
+    const image = new Image(); image.src = src; return [name, image];
+  }));
 
   // ---------- Timing ----------
   function bezier(x1, y1, x2, y2) {
@@ -99,9 +106,17 @@
   }
   const drift = (rings, t, amt) => rings.map((p, i) => [p[0] + amt * Math.sin(t * 0.9 + i * 2.1), p[1] + amt * Math.cos(t * 0.7 + i * 1.7)]);
 
+  // Scratch canvases per mark size. Sizes are rounded and only a few are kept, so a mark that grows every frame
+  // doesn't leave hundreds of big canvases behind.
   const work = new Map();
   function workFor(px) {
-    if (!work.has(px)) {
+    if (work.has(px)) { const w = work.get(px); work.delete(px); work.set(px, w); return w; }   // most recent last
+    while (work.size >= 8) {
+      const [k, old] = work.entries().next().value;
+      for (const c of [old.a, old.b, old.out]) c.width = c.height = 0;   // release the memory now
+      work.delete(k);
+    }
+    {
       const mk = () => { const c = document.createElement("canvas"); c.width = c.height = px; return c; };
       const a = mk(), b = mk(), out = mk();
       work.set(px, { a, b, out, actx: a.getContext("2d"), bctx: b.getContext("2d", { willReadFrequently: true }), octx: out.getContext("2d") });
@@ -110,7 +125,7 @@
   }
   function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
   function mark(px, rings, { ink = INK, rim = 1 } = {}) {
-    px = Math.max(8, Math.round(px));
+    px = Math.max(8, px < 120 ? Math.round(px / 4) * 4 : Math.round(px / 24) * 24);
     const { a, b, out, actx, bctx, octx } = workFor(px);
     const small = px < 80, boost = small ? cfg.smallBoost : 1;
     const s = px / 300, c = px / 2, R = 150 * s;
@@ -164,6 +179,24 @@
     g.beginPath(); g.roundRect(x, y, w, h, r);
     if (fill) { g.fillStyle = fill; g.fill(); }
     if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+  }
+  function avatar(name, x, y, d) {
+    g.save();
+    g.beginPath(); g.arc(x, y, d / 2, 0, Math.PI * 2); g.clip();
+    const image = AVATARS[name];
+    if (image?.complete && image.naturalWidth) {
+      g.fillStyle = PAPER; g.fillRect(x - d / 2, y - d / 2, d, d);
+      g.drawImage(image, x - d / 2, y - d / 2, d, d);
+    } else {
+      const fallbacks = { Maya: ["#ff4fbd", "#801cff"], Ada: ["#ff6c35", "#ffb21c"], You: ["#00ef66", "#111"] };
+      const [a, b] = fallbacks[name] || ["#dfe2e8", "#aeb4c0"];
+      const gr = g.createLinearGradient(x - d / 2, y - d / 2, x + d / 2, y + d / 2);
+      gr.addColorStop(0, a); gr.addColorStop(1, b);
+      g.fillStyle = gr; g.fillRect(x - d / 2, y - d / 2, d, d);
+    }
+    g.restore();
+    g.beginPath(); g.arc(x, y, d / 2 - 1, 0, Math.PI * 2);
+    g.strokeStyle = "rgba(0,0,0,0.10)"; g.lineWidth = 2; g.stroke();
   }
   function alpha(a, fn) { if (a <= 0.002) return; g.save(); g.globalAlpha *= Math.min(1, a); fn(); g.restore(); }
   function check(x, y, s, color) {
@@ -349,12 +382,12 @@
   function chatCard(u) {
     return layer("chat", 900, 470, 2, () => {
       windowChrome(900, 470, "Messages · #launch");
-      rr(36, 92, 54, 54, 27, "#d4d4da");
+      avatar("Maya", 63, 119, 54);
       sysTxt("Maya", 108, 112, 23, INK, "left", 600);
       sysTxt("When do we ship 1.1?", 108, 142, 26, "rgba(0,0,0,0.78)");
       const landed = easeOut(prog(u, 2.12, 2.3));
       alpha(landed, () => {
-        rr(36, 186, 54, 54, 27, INK);
+        avatar("You", 63, 213, 54);
         sysTxt("You", 108, 206, 23, INK, "left", 600);
         sysTxt("Ship it Thursday at 4.", 108, 236, 26, "rgba(0,0,0,0.78)");
       });
@@ -477,12 +510,8 @@
       if (cs > 0) {
         g.save(); g.translate(130, DESK.h - 130); g.scale(cs, cs);
         g.beginPath(); g.arc(0, 0, 100, 0, Math.PI * 2); g.fillStyle = PAPER; g.fill();
-        g.beginPath(); g.arc(0, 0, 93, 0, Math.PI * 2); g.save(); g.clip();
-        const gr = g.createLinearGradient(0, -93, 0, 93); gr.addColorStop(0, "#dfe2e8"); gr.addColorStop(1, "#b6bbc6"); g.fillStyle = gr; g.fillRect(-93, -93, 186, 186);
-        g.fillStyle = "#6c717d";
-        g.beginPath(); g.arc(0, -16, 36, 0, Math.PI * 2); g.fill();
-        g.beginPath(); g.ellipse(0, 82, 74, 58, 0, 0, Math.PI * 2); g.fill();
-        g.restore(); g.restore();
+        avatar("You", 0, 0, 186);
+        g.restore();
       }
     });
   }
@@ -517,9 +546,9 @@
   // ---------- Scene 3 · Every call, noted (8.3 – 11.6) ----------
   const NOTE = { x: 960, y: 470, w: 1000, h: 660 };
   const LINES = [
-    ["Others", "Can we ship 1.1 on Thursday?", 0.35],
+    ["Maya", "Can we ship 1.1 on Thursday?", 0.35],
     ["You", "Yes. I'll send the release notes tomorrow.", 0.9],
-    ["Others", "Great, and Ada will update the site.", 1.45],
+    ["Ada", "Great, I'll update the site.", 1.45],
   ];
   function notesCard(u) {
     return layer("notes", NOTE.w, NOTE.h, 2, () => {
@@ -539,10 +568,11 @@
         const a = easeOut(prog(u, at, at + 0.3));
         alpha(a * mix(1, 0.45, settle), () => {
           const you = who === "You";
+          avatar(who, 64, y - 10, 40);
           const cw = measure(who, 21, 600, "Geist", 0) + 30;
-          rr(44, y - 30, cw, 40, 20, you ? INK : null, you ? null : "rgba(0,0,0,0.25)", 2);
-          txt(who, 44 + cw / 2, y - 3, { size: 21, weight: 600, color: you ? PAPER : "rgba(0,0,0,0.55)", align: "center", track: 0 });
-          kinetic(u, said.split(" "), 186, y, at + 0.05, { size: 29, step: 0.05, dur: 0.3, align: "left", rise: 14, color: "rgba(0,0,0,0.85)", track: -0.01 });
+          rr(94, y - 30, cw, 40, 20, you ? INK : null, you ? null : "rgba(0,0,0,0.25)", 2);
+          txt(who, 94 + cw / 2, y - 3, { size: 21, weight: 600, color: you ? PAPER : "rgba(0,0,0,0.55)", align: "center", track: 0 });
+          kinetic(u, said.split(" "), 220, y, at + 0.05, { size: 29, step: 0.05, dur: 0.3, align: "left", rise: 14, color: "rgba(0,0,0,0.85)", track: -0.01 });
         });
       });
       const n = easeOut(prog(u, 2.05, 2.35));
@@ -820,7 +850,16 @@
   window.exportFilm = exportFilm;
 
   Promise.all([document.fonts.load(font(88, 500)), document.fonts.load(font(40, 600)), document.fonts.load(font(28, 500, "Geist Mono"))])
-    .then(() => { t0 = performance.now() - cur * 1000; requestAnimationFrame(tick); });
+    .then(async () => {
+      t0 = performance.now() - cur * 1000; requestAnimationFrame(tick);
+      // launch.html?export=<name>&return=<url>: render on load, then go back (used by the sound mixer).
+      const q = new URLSearchParams(location.search);
+      if (q.has("export")) {
+        await exportFilm(q.get("export"));
+        const back = q.get("return");
+        if (back && back.startsWith("/") && window.exportResult?.ok) location.href = back;
+      }
+    });
 })();
 </script>
 </body>
