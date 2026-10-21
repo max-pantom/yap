@@ -1,4 +1,4 @@
-# Yap launch film: SFX track
+# Yap launch film: SFX, music and mix
 
 `sfx.wav` is 48 kHz, 16-bit, stereo, exactly 16.000 s. Everything is synthesized
 procedurally by `make_sfx.py` (Python 3 standard library only, fixed random seed,
@@ -53,8 +53,44 @@ more than 15 ms off). Takes about 8 seconds.
 | 14.85 | brand sting | warm Amaj add-style bell chord (A3 E4 A4 C#5 E5 B5), soft 110/55 Hz body, air on the attack; faded to silence at 16.0 |
 | 14.95, 15.20 | tagline ticks | two very soft ticks under the sting |
 
-## Last measured values
+## SFX level (revision 2)
 
-Peak -1.9 dBFS, RMS about -22 dBFS, about -18 LUFS (own BS.1770 estimate, sparse
-material), brand sting is the loudest moment. All 72 sound elements start within
-1 to 5 ms of their cue time (checked against each element's own signal at -62 dBFS).
+All effects are trimmed -4 dB; the brand sting only -2.5 dB so the ending still lands.
+Measured: peak -4.0 dBFS, about -21.5 LUFS (own BS.1770 estimate), sting is the loudest
+moment. All 72 elements start within 0 to 5 ms of their cue time.
+
+## Music bed: `make_music.py` -> `music.wav`, `mix.wav`
+
+A minimal warm pulse, no melody: muted electric-keys plucks arpeggiating each chord
+with a soft ping-pong echo, a light sub on steps 1 and 4 of each bar, a barely-there
+shaker on off-beats, and a slow detuned sine pad that "opens" (gets brighter) from
+2.0 to 2.55 into the dive. Key A major, chords Amaj9 / D / F#m / E, resolving to the
+same Amaj9 as the sting at 14.85. Tempo 100 bpm in eighth notes (a step every 0.300 s,
+grid offset 0.16 s, 8-step bars). Starts from true silence with a 1 s fade-in.
+
+Film beats get exactly-timed accents (grid notes within 70 ms are dropped):
+2.55 chord stab + sub (arrival), 5.05 small anticipation, 5.27 / 5.57 / 5.87 rising
+D, E, F#m stabs with sub (countdown), 8.20 E stab, 11.45 D stab, 13.75 two-note pluck,
+14.85 Amaj9 chord with low body decaying to silence by 16.0. The bed pulls back
+(breath, to 12 percent) from 14.25 to 14.80 and the pulse stops at 14.2.
+
+Ducking (smooth, 25 ms attack / 180 ms release): riser -3.5 dB, fall + fly-up -2,
+whip pan + countdown -3, push-in -1.5, whip up -3, pull back -2.5, logo morph -2, sting -4.
+
+Levels (measured): music-only about -25 LUFS (3.5 LU under the effects), peak -8.3 dBFS;
+mix.wav about -20.6 LUFS, peak -2.9 dBFS. Music onsets land 4 to 6 ms after each film beat.
+`mix.wav` = `sfx.wav` + `music.wav` (soft limiter only as a safety). The coordinator's -16 LUFS mix target
+conflicts with "effects 4 dB quieter and music clearly under them"; reaching it would
+need the music louder than the effects (`YAP_MIX_LUFS=-16`) or a master gain of
+about +4.6 dB, which undoes the SFX reduction. Left at the quieter, music-under balance;
+a master gain of up to about +1.8 dB keeps the peak under -1 dBFS.
+
+Re-run (in order, from the repo root):
+
+    python3 design/launch/audio/make_sfx.py
+    python3 design/launch/audio/make_music.py
+
+`make_music.py` reads `sfx.wav` (it runs `make_sfx.py` itself if the file is missing),
+writes `music.wav` and `mix.wav`, and prints duration, rate, peak, RMS and LUFS for all
+three files, the music-onset check, and the ducking depths (about 25 s).
+Env knobs: `YAP_MUSIC_LU_BELOW` (default 3.5), `YAP_MIX_LUFS` (force a mix loudness).

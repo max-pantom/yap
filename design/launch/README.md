@@ -21,8 +21,8 @@ Every frame is drawn by `draw(t)` in `launch.html`, so the preview and the expor
 node design/launch/serve.mjs     # then open http://127.0.0.1:3010 and press Export MP4
 ```
 
-Export encodes frame by frame (WebCodecs + mp4-muxer), mixes in `audio/sfx.wav` as AAC, and saves
+Export encodes frame by frame (WebCodecs + mp4-muxer), mixes in `audio/mix.wav` (music + effects) as AAC, and saves
 `out/yap-launch-v3.mp4` and a poster frame (v1 saves `out/yap-launch.mp4`). The Flow bar is drawn to the app's
-own spec in `FlowBar.swift` at 2×. The sound effects are synthesized by `audio/make_sfx.py` (see `audio/README.md`). The sound effects carry no music; add a track in your editor of choice if you want one.
+own spec in `FlowBar.swift` at 2×. The sound effects are synthesized by `audio/make_sfx.py` (see `audio/README.md`). The soundtrack is a small synthesized music bed (A major, 100 bpm) under the effects; stems are `audio/music.wav` and `audio/sfx.wav`.
 
 The Geist fonts in `fonts/` are © Vercel, under the SIL Open Font License 1.1.

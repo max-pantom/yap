@@ -21,7 +21,7 @@
 </head>
 <body>
 <canvas id="film" width="1920" height="1080"></canvas>
-<audio id="sfx" src="audio/sfx.wav" preload="auto"></audio>
+<audio id="sfx" preload="auto"></audio>
 <div class="bar">
   <button id="play">Pause</button>
   <input id="scrub" type="range" min="0" max="16" step="0.01" value="0" aria-label="Time">
@@ -731,13 +731,21 @@
   window.renderAt = (t) => { playing = false; cur = t; draw(t); };
 
   // ---------- Export ----------
+  // The soundtrack: music + effects (audio/mix.wav), or the effects alone if there's no mix yet.
+  const SOUNDS = ["audio/mix.wav", "audio/sfx.wav"];
+  async function soundURL() {
+    for (const u of SOUNDS) { try { if ((await fetch(u, { method: "HEAD", cache: "no-store" })).ok) return u; } catch (_) {} }
+    return null;
+  }
   async function loadSound() {
     try {
-      const r = await fetch("audio/sfx.wav", { cache: "no-store" });
-      if (!r.ok) return null;
+      const u = await soundURL();
+      if (!u) return null;
+      const r = await fetch(u, { cache: "no-store" });
       return await new OfflineAudioContext(2, 48000 * DUR, 48000).decodeAudioData(await r.arrayBuffer());
     } catch (_) { return null; }
   }
+  soundURL().then((u) => { if (u) document.getElementById("sfx").src = u; });
   async function save(name, blob) {
     const r = await fetch(`out/${name}`, { method: "PUT", body: blob });
     if (!r.ok) throw new Error(`Saving ${name} failed (${r.status}). Is serve.mjs running?`);

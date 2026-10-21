@@ -456,13 +456,20 @@ tick("tagline tick 15.20", 15.20, 1800, 0.10, pan=0.1, body=250)
 # ----------------------------------------------------------------- mix
 mixL = [0.0] * NS
 mixR = [0.0] * NS
+# overall SFX trim: -4 dB for everything, the brand sting only -2.5 dB so the
+# ending still lands (sting sits 1.5 dB closer to the rest than before).
+def stem_trim(name):
+    return 10 ** ((-2.5 if name.startswith("brand sting") else -4.0) / 20)
+
+
 for name, t, i0, L, R in stems:
+    tg = stem_trim(name)
     for k in range(len(L)):
         j = i0 + k
         if j >= NS:
             break
-        mixL[j] += L[k]
-        mixR[j] += R[k]
+        mixL[j] += L[k] * tg
+        mixR[j] += R[k] * tg
 
 # quiet room bed (~ -50 dBFS RMS, lowpassed, faded at the edges)
 bedL = svf(white(NS), [900.0] * NS, 0.7, "lp")
@@ -518,8 +525,10 @@ def soft_limit(x, knee=0.62, ceil=0.885):
 # reach -15 LUFS without squashing, so we settle for the highest gain that
 # keeps the brand sting the loudest moment and the limiter nearly transparent.
 PRE_GAIN = float(os.environ.get("YAP_PRE_GAIN", "1.0"))
-sting_raw = max(max(abs(v) for v in mixL[N(14.85):N(15.2)]), max(abs(v) for v in mixR[N(14.85):N(15.2)]))
-GLOBAL = PRE_GAIN * 0.84 / sting_raw  # sting peak -> ~0.84 (-1.5 dBFS); it is the loudest moment
+# Reference level is fixed (same as the previous 0.84-peak sting version), then the
+# trims above are applied on top. GLOBAL = 0.84 / (untrimmed sting peak).
+sting_raw = max(max(abs(v) for v in mixL[N(14.85):N(15.2)]), max(abs(v) for v in mixR[N(14.85):N(15.2)])) / stem_trim("brand sting")
+GLOBAL = PRE_GAIN * 0.84 / sting_raw
 if os.environ.get("YAP_DEBUG"):
     for nm, t, i0, L, R in sorted(stems, key=lambda s: -max(max(map(abs, s[3])), max(map(abs, s[4])))) [:14]:
         print("  peak %.3f  %s" % (GLOBAL * max(max(map(abs, L)), max(map(abs, R))), nm))
@@ -575,7 +584,7 @@ THR = 10 ** (-62 / 20)
 print("\n%-34s %8s %10s %9s %s" % ("cue (stem)", "cue t", "onset t", "delta ms", "mix +dB"))
 bad = 0
 for name, t, i0, L, R in stems:
-    gl = GLOBAL
+    gl = GLOBAL * stem_trim(name)
     first = None
     for k in range(len(L)):
         if max(abs(L[k]), abs(R[k])) * gl > THR:
