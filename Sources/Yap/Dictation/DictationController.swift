@@ -447,13 +447,37 @@ struct DictationEntry: Codable, Identifiable, Hashable {
 @MainActor
 final class HistoryStore: ObservableObject {
     @Published private(set) var entries: [DictationEntry] = []
-    private let url = Prefs.supportFolder.appendingPathComponent("history.json")
+    private var url: URL { Prefs.historyFolder.appendingPathComponent("history.json") }
 
-    init() {
-        if let data = try? Data(contentsOf: url),
-           let list = try? JSONDecoder().decode([DictationEntry].self, from: data) {
-            entries = list
+    init() { entries = Self.read(url) ?? [] }
+
+    private static func read(_ u: URL) -> [DictationEntry]? {
+        guard let data = try? Data(contentsOf: u) else { return nil }
+        return try? JSONDecoder().decode([DictationEntry].self, from: data)
+    }
+
+    /// Moves history.json to `folder` (nil = the default). If one is already there (another Mac, an old copy),
+    /// the two lists are merged, so no dictation is lost. Returns how many entries the history now holds.
+    @discardableResult
+    func relocate(to folder: URL?) -> Int {
+        let old = url
+        let d = UserDefaults.standard
+        if let folder { d.set(folder.standardizedFileURL.path, forKey: Prefs.Key.historyFolder) } else { d.removeObject(forKey: Prefs.Key.historyFolder) }
+        let new = url
+        guard new.standardizedFileURL != old.standardizedFileURL else { return entries.count }
+        var merged = entries
+        if let there = Self.read(new) {
+            let known = Set(merged.map(\.id))
+            merged += there.filter { !known.contains($0.id) }
+            merged.sort { $0.date > $1.date }
+            if merged.count > 2000 { merged.removeLast(merged.count - 2000) }
         }
+        entries = merged
+        save()
+        if FileManager.default.fileExists(atPath: new.path), FileManager.default.fileExists(atPath: old.path) {
+            try? FileManager.default.trashItem(at: old, resultingItemURL: nil)   // to the Trash, not deleted
+        }
+        return entries.count
     }
 
     func add(_ e: DictationEntry) {

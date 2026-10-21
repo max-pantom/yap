@@ -197,6 +197,12 @@ private struct DictationTab: View {
                     Text("Fix a word right after it's typed (Jon → John) and Yap spells it right next time.")
                 }
                 LabeledContent("Learned words and spellings") { GoTo(page: .words, title: "See list") }
+                LabeledContent {
+                    HistoryFolderControl()
+                } label: {
+                    Text("Dictation history saved in")
+                    Text("Every dictation (history.json), for the Library's Dictations list.")
+                }
             }
 
             Section("Speech recognition") {

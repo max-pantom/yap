@@ -32,6 +32,31 @@ enum SelfTest {
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
         }
+        if args.contains("--history-move-test") {
+            // Moving the dictation history: merged by id, newest first, the old file sent to the Trash.
+            let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("yap-hist-\(UUID().uuidString)")
+            let A = root.appendingPathComponent("A"), B = root.appendingPathComponent("B")
+            try? fm.createDirectory(at: A, withIntermediateDirectories: true); try? fm.createDirectory(at: B, withIntermediateDirectories: true)
+            let e1 = DictationEntry(date: Date(timeIntervalSince1970: 1), raw: "one", text: "one", duration: 1, isCommand: false)
+            let e2 = DictationEntry(date: Date(timeIntervalSince1970: 2), raw: "two", text: "two", duration: 1, isCommand: false)
+            let e3 = DictationEntry(date: Date(timeIntervalSince1970: 3), raw: "three", text: "three", duration: 1, isCommand: false)
+            try! JSONEncoder().encode([e2, e1]).write(to: A.appendingPathComponent("history.json"))
+            try! JSONEncoder().encode([e3, e2]).write(to: B.appendingPathComponent("history.json"))
+            let d = UserDefaults.standard, prev = d.string(forKey: Prefs.Key.historyFolder)
+            d.set(A.path, forKey: Prefs.Key.historyFolder)        // never touch the real history
+            MainActor.assumeIsolated {
+                let store = HistoryStore()
+                let before = store.entries.count
+                let after = store.relocate(to: B)
+                let onDisk = (try? JSONDecoder().decode([DictationEntry].self, from: Data(contentsOf: B.appendingPathComponent("history.json")))) ?? []
+                let ok = before == 2 && after == 3 && onDisk.map(\.text) == ["three", "two", "one"]
+                    && !fm.fileExists(atPath: A.appendingPathComponent("history.json").path)
+                print("history: \(before) → \(after), on disk \(onDisk.map(\.text)):", ok ? "ok" : "FAILED")
+                if let prev { d.set(prev, forKey: Prefs.Key.historyFolder) } else { d.removeObject(forKey: Prefs.Key.historyFolder) }
+                try? fm.removeItem(at: root)
+                exit(ok ? 0 : 1)
+            }
+        }
         if args.contains("--folder-move-test") {
             // Moving recordings to a new folder: files move, existing folders merge, same-name files stay behind.
             let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("yap-move-\(UUID().uuidString)")

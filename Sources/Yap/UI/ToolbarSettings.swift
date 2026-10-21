@@ -307,6 +307,12 @@ private struct DictationColumns: View {
         }
         GroupRule()
         Section {
+            LabeledContent("History:") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HistoryFolderControl()
+                    Text("Every dictation (history.json), for the Library's Dictations list.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             LabeledContent("Speech:") {
                 HStack(spacing: 8) {
                     Text(model.dictation.engineStatus).foregroundStyle(.secondary)

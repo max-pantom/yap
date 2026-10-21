@@ -18,6 +18,7 @@ enum Prefs {
         static let recCountdown = "rec.countdown"
         static let recAutoCopy = "rec.autoCopy"
         static let recFolder = "rec.folder"
+        static let historyFolder = "dictation.historyFolder"   // "" = Application Support/Yap
         static let bubbleSize = "rec.bubbleSize"
         static let onboarded = "general.onboarded"
         static let showFlowBar = "general.showFlowBar"
@@ -63,6 +64,7 @@ enum Prefs {
             Key.recCountdown: true,
             Key.recAutoCopy: true,
             Key.recFolder: "",
+            Key.historyFolder: "",
             Key.bubbleSize: 220.0,
             Key.onboarded: false,
             Key.showFlowBar: true,
@@ -103,6 +105,16 @@ enum Prefs {
         if let p = d.string(forKey: Key.recFolder), !p.isEmpty { return URL(fileURLWithPath: p) }
         let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
         return movies.appendingPathComponent("Yap", isDirectory: true)
+    }
+
+    /// Where history.json lives: a folder you picked, or Yap's own Application Support folder.
+    static var historyFolder: URL {
+        if let p = d.string(forKey: Key.historyFolder), !p.isEmpty {
+            let u = URL(fileURLWithPath: p, isDirectory: true)
+            try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+            return u
+        }
+        return supportFolder
     }
 
     static var supportFolder: URL {

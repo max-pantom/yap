@@ -8,16 +8,8 @@ enum RecordingsFolder {
     static var isDefault: Bool { (UserDefaults.standard.string(forKey: Prefs.Key.recFolder) ?? "").isEmpty }
 
     static func choose() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Use This Folder"
-        panel.message = "Choose where Yap saves recordings, their notes and meeting notes."
-        panel.directoryURL = Prefs.recordingsFolder.deletingLastPathComponent()
-        NSApp.activate()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let url = FolderPicker.pick("Choose where Yap saves recordings, their notes and meeting notes.",
+                                          from: Prefs.recordingsFolder.deletingLastPathComponent()) else { return }
         change(to: url)
     }
 
@@ -113,5 +105,46 @@ struct RecordingsFolderControl: View {
             if !custom.isEmpty { Button("Use Default") { RecordingsFolder.useDefault() } }
         }
         .id(custom)
+    }
+}
+
+@MainActor
+enum FolderPicker {
+    static func pick(_ message: String, from start: URL) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Use This Folder"
+        panel.message = message
+        panel.directoryURL = start
+        NSApp.activate()
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+}
+
+/// "~/Library/Application Support/Yap   Change…  Use Default" for the dictation history (history.json).
+struct HistoryFolderControl: View {
+    @AppStorage(Prefs.Key.historyFolder) private var custom = ""
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(RecordingsFolder.display(Prefs.historyFolder)) {
+                NSWorkspace.shared.activateFileViewerSelecting([Prefs.historyFolder.appendingPathComponent("history.json")])
+            }
+            .buttonStyle(.link)
+            .help("Show history.json in Finder")
+            Button("Change…") {
+                guard let url = FolderPicker.pick("Choose where Yap keeps your dictation history (history.json).", from: Prefs.historyFolder) else { return }
+                moved(AppModel.shared.history.relocate(to: url))
+            }
+            if !custom.isEmpty { Button("Use Default") { moved(AppModel.shared.history.relocate(to: nil)) } }
+        }
+        .id(custom)
+    }
+
+    private func moved(_ count: Int) {
+        HUD.shared.toast("Dictation history (\(count) entries) is now in \(RecordingsFolder.display(Prefs.historyFolder))", symbol: "folder")
     }
 }

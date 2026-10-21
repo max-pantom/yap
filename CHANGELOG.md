@@ -8,6 +8,8 @@ Every release, newest first. The same list is on [yap.primitive8.cc/changelog](h
 - **Choose where recordings go.** Settings → Recording → Saved in → Change… picks any folder for recordings, their
   captions and notes (.json) and meeting notes, and offers to move the ones you already have. Use Default goes back
   to ~/Movies/Yap.
+- **Choose where your dictation history goes.** Settings → Dictation → History → Change… moves history.json to any
+  folder, like a synced one. If that folder already has a history, the two are merged.
 
 ## 1.1 · 20 October 2026
 
