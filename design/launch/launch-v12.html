@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yap 1.2 Launch Film</title>
+<style>
+  @font-face { font-family: "Geist"; src: url(fonts/geist.woff2) format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url(fonts/geist-mono.woff2) format("woff2"); font-weight: 100 900; }
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #151517; color: #f2f2f4; font: 13px/1.4 "Geist", system-ui, sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; }
+  canvas { width: min(100%, 860px); aspect-ratio: 1 / 1; background: #fff; border-radius: 6px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; width: min(100%, 860px); }
+  .bar input { flex: 1; min-width: 200px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 999px; border: 1px solid #3a3a3e; background: #232326; color: inherit; cursor: pointer; }
+  button.solid { background: #fff; color: #000; border-color: #fff; }
+  #time { font-family: "Geist Mono", monospace; min-width: 6ch; }
+  #status { color: #a1a1a6; }
+</style>
+</head>
+<body>
+<canvas id="film" width="1920" height="1920"></canvas>
+<audio id="sfx" preload="auto"></audio>
+<div class="bar">
+  <button id="play">Pause</button>
+  <input id="scrub" type="range" min="0" max="15" step="0.01" value="0" aria-label="Time">
+  <span id="time">0.00</span>
+  <button id="export" class="solid">Export MP4</button>
+  <span id="status"></span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<script>
+// Yap 1.2 launch film (built on the 1.1 film, v2): one continuous camera on the white page. Kinetic type that the camera tracks (Cosmos),
+// line work that morphs into the logo (X), and a camera that never stops moving: slow push-ins, orbits around
+// floating windows, shallow focus and motion blur on the fast moves (Meta). Every frame is a pure function of
+// time, so the preview and the exported MP4 are identical.
+(() => {
+  const W = 1920, H = 1920, FPS = 60, DUR = 15;
+  const INK = "#000", MUTED = "rgba(0,0,0,0.5)", SCENE = "#e8e8ed", RED = "#e6383b", PAPER = "#fff";
+  const canvas = document.getElementById("film");
+  const main = canvas.getContext("2d");
+  let g = main;                                   // the context everything draws into (swapped for layers)
+  const AVATARS = Object.fromEntries(Object.entries({
+    You: "assets/user-avatar.png",
+    Maya: "assets/maya-avatar.png",
+    Ada: "assets/ada-avatar.png",
+  }).map(([name, src]) => {
+    const image = new Image(); image.src = src; return [name, image];
+  }));
+
+  // ---------- Timing ----------
+  function bezier(x1, y1, x2, y2) {
+    const f = (a, b, t) => 3 * (1 - t) * (1 - t) * t * a + 3 * (1 - t) * t * t * b + t * t * t;
+    return (x) => {
+      if (x <= 0) return 0; if (x >= 1) return 1;
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 26; i++) { const m = (lo + hi) / 2; (f(x1, x2, m) < x) ? lo = m : hi = m; }
+      return f(y1, y2, (lo + hi) / 2);
+    };
+  }
+  const easeOut = bezier(0.23, 1, 0.32, 1);
+  const easeInOut = bezier(0.77, 0, 0.175, 1);
+  const easeIn = (x) => x * x * x;
+  const backOut = (x) => { const c1 = 1.9, c3 = c1 + 1; return x <= 0 ? 0 : x >= 1 ? 1 : 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const mix = (a, b, e) => a + (b - a) * e;
+
+  // ---------- The mark (Yap's own settings and construction) ----------
+  const cfg = {
+    ease: [0.77, 0, 0.175, 1], holdMs: 220, moveMs: 860,
+    stroke: 10, rim: 9, fillet: 5.8, fullness: 0.62, smallBoost: 1.55,
+    keys: [
+      [[-54, -3], [-50, -86], [46, -66]],
+      [[-58, 0], [-109, -61], [-55, -87]],
+      [[-58, 0], [-138, -20], [-202, -48]],
+      [[24, -28], [60, -140], [-72, -82]],
+      [[164, -8], [-38, -150], [-160, 0]],
+    ],
+    idleDrift: 7,
+  };
+  const markEase = bezier(...cfg.ease);
+  const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  function match(a, b) {
+    let best = b, bd = Infinity;
+    for (const p of perms) {
+      const c = p.map((i) => b[i]);
+      const d = c.reduce((s, q, i) => s + Math.hypot(q[0] - a[i][0], q[1] - a[i][1]), 0);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  }
+  const frames = (() => {
+    const seq = [0, 1, 2, 3, 4, 0], out = [cfg.keys[0]];
+    for (let i = 1; i < seq.length; i++) out.push(match(out[i - 1], cfg.keys[seq[i]]));
+    return out;
+  })();
+  const lerpRings = (a, b, e) => a.map((p, i) => [p[0] + (b[i][0] - p[0]) * e, p[1] + (b[i][1] - p[1]) * e]);
+  function loopRings(t) {
+    const seg = (cfg.holdMs + cfg.moveMs) / 1000, L = seg * (frames.length - 1);
+    const u = ((t % L) + L) % L, i = Math.min(frames.length - 2, Math.floor(u / seg)), local = u - i * seg;
+    const hold = cfg.holdMs / 1000;
+    return lerpRings(frames[i], frames[i + 1], local < hold ? 0 : markEase((local - hold) / (cfg.moveMs / 1000)));
+  }
+  const drift = (rings, t, amt) => rings.map((p, i) => [p[0] + amt * Math.sin(t * 0.9 + i * 2.1), p[1] + amt * Math.cos(t * 0.7 + i * 1.7)]);
+
+  // Scratch canvases per mark size. Sizes are rounded and only a few are kept, so a mark that grows every frame
+  // doesn't leave hundreds of big canvases behind.
+  const work = new Map();
+  function workFor(px) {
+    if (work.has(px)) { const w = work.get(px); work.delete(px); work.set(px, w); return w; }   // most recent last
+    while (work.size >= 8) {
+      const [k, old] = work.entries().next().value;
+      for (const c of [old.a, old.b, old.out]) c.width = c.height = 0;   // release the memory now
+      work.delete(k);
+    }
+    {
+      const mk = () => { const c = document.createElement("canvas"); c.width = c.height = px; return c; };
+      const a = mk(), b = mk(), out = mk();
+      work.set(px, { a, b, out, actx: a.getContext("2d"), bctx: b.getContext("2d", { willReadFrequently: true }), octx: out.getContext("2d") });
+    }
+    return work.get(px);
+  }
+  function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+  function mark(px, rings, { ink = INK, rim = 1 } = {}) {
+    px = Math.max(8, px < 120 ? Math.round(px / 4) * 4 : Math.round(px / 24) * 24);
+    const { a, b, out, actx, bctx, octx } = workFor(px);
+    const small = px < 80, boost = small ? cfg.smallBoost : 1;
+    const s = px / 300, c = px / 2, R = 150 * s;
+    actx.setTransform(1, 0, 0, 1, 0, 0);
+    actx.fillStyle = "#fff"; actx.fillRect(0, 0, px, px);
+    actx.strokeStyle = "#000"; actx.lineWidth = cfg.stroke * boost * s;
+    for (const [x, y] of [[0, 0], ...rings]) { actx.beginPath(); actx.arc(c + x * s, c + y * s, 145 * s, 0, Math.PI * 2); actx.stroke(); }
+    bctx.clearRect(0, 0, px, px);
+    const blur = cfg.fillet * s * (small ? 0.85 : 1);
+    if (blur > 0.2) bctx.filter = `blur(${blur.toFixed(2)}px)`;
+    bctx.drawImage(a, 0, 0);
+    bctx.filter = "none";
+    const img = bctx.getImageData(0, 0, px, px), d = img.data;
+    const [ir, ig, ib] = hexToRgb(ink), k = small ? 14 : 48, edge = 1 / Math.max(1, s * 2);
+    for (let yy = 0, i = 0; yy < px; yy++) {
+      for (let xx = 0; xx < px; xx++, i += 4) {
+        let al = clamp((cfg.fullness - d[i] / 255) * k + 0.5);
+        al *= clamp((R - Math.hypot(xx + 0.5 - c, yy + 0.5 - c)) * edge * 2 + 0.5);
+        d[i] = ir; d[i + 1] = ig; d[i + 2] = ib; d[i + 3] = al * 255;
+      }
+    }
+    bctx.putImageData(img, 0, 0);
+    octx.clearRect(0, 0, px, px);
+    octx.drawImage(b, 0, 0);
+    octx.strokeStyle = ink; octx.lineWidth = cfg.rim * boost * s;
+    octx.beginPath();
+    octx.arc(c, c, R - cfg.rim * boost * s / 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * rim);
+    octx.stroke();
+    return out;
+  }
+  /** The mark at `size` units; `res` is how much the camera enlarges it, so it stays sharp when zoomed. */
+  function drawMark(cx, cy, size, rings, opt = {}) {
+    const m = mark(Math.min(1100, size * (opt.res ?? 1)), rings, opt);
+    g.drawImage(m, cx - size / 2, cy - size / 2, size, size);
+  }
+
+  // ---------- Drawing helpers (all draw into `g`) ----------
+  const font = (size, weight = 500, family = "Geist") => `${weight} ${size}px "${family}"`;
+  function txt(s, x, y, { size = 48, weight = 500, color = INK, align = "left", family = "Geist", track = -0.02 } = {}) {
+    g.font = font(size, weight, family);
+    g.letterSpacing = `${(track * size).toFixed(2)}px`;
+    g.fillStyle = color; g.textAlign = align; g.textBaseline = "alphabetic";
+    g.fillText(s, x, y);
+  }
+  function measure(s, size, weight = 500, family = "Geist", track = -0.02) {
+    g.font = font(size, weight, family);
+    g.letterSpacing = `${(track * size).toFixed(2)}px`;
+    return g.measureText(s).width;
+  }
+  function rr(x, y, w, h, r, fill, stroke, lw = 2) {
+    g.beginPath(); g.roundRect(x, y, w, h, r);
+    if (fill) { g.fillStyle = fill; g.fill(); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+  }
+  function avatar(name, x, y, d) {
+    g.save();
+    g.beginPath(); g.arc(x, y, d / 2, 0, Math.PI * 2); g.clip();
+    const image = AVATARS[name];
+    if (image?.complete && image.naturalWidth) {
+      g.fillStyle = PAPER; g.fillRect(x - d / 2, y - d / 2, d, d);
+      g.drawImage(image, x - d / 2, y - d / 2, d, d);
+    } else {
+      const fallbacks = { Maya: ["#ff4fbd", "#801cff"], Ada: ["#ff6c35", "#ffb21c"], You: ["#00ef66", "#111"] };
+      const [a, b] = fallbacks[name] || ["#dfe2e8", "#aeb4c0"];
+      const gr = g.createLinearGradient(x - d / 2, y - d / 2, x + d / 2, y + d / 2);
+      gr.addColorStop(0, a); gr.addColorStop(1, b);
+      g.fillStyle = gr; g.fillRect(x - d / 2, y - d / 2, d, d);
+    }
+    g.restore();
+    g.beginPath(); g.arc(x, y, d / 2 - 1, 0, Math.PI * 2);
+    g.strokeStyle = "rgba(0,0,0,0.10)"; g.lineWidth = 2; g.stroke();
+  }
+  function alpha(a, fn) { if (a <= 0.002) return; g.save(); g.globalAlpha *= Math.min(1, a); fn(); g.restore(); }
+  function check(x, y, s, color) {
+    g.strokeStyle = color; g.lineWidth = 4 * s; g.lineCap = "round"; g.lineJoin = "round";
+    g.beginPath(); g.moveTo(x - 7 * s, y); g.lineTo(x - 2 * s, y + 6 * s); g.lineTo(x + 8 * s, y - 6 * s); g.stroke();
+  }
+  /** The camera: looks at (cx, cy) with zoom and roll, plus a breathing drift so it is never quite still. */
+  function camera(t, cx, cy, zoom, roll, fn, { tx = 0, ty = 0, breathe = 1 } = {}) {
+    g.save();
+    const dx = breathe * 7 * Math.sin(t * 0.61), dy = breathe * 5 * Math.sin(t * 0.47 + 1), dr = breathe * 0.0025 * Math.sin(t * 0.37);
+    g.translate(W / 2 + tx + dx, H / 2 + ty + dy);
+    g.rotate(roll + dr);
+    g.scale(zoom, zoom);
+    g.translate(-cx, -cy);
+    fn();
+    g.restore();
+  }
+  // A layer is an offscreen canvas painted with its own context, so cards can be projected in perspective.
+  const layers = new Map();
+  function layer(name, w, h, scale, paint) {
+    let L = layers.get(name);
+    if (!L || L.c.width !== Math.round(w * scale)) {
+      const c = document.createElement("canvas"); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      L = { c, x: c.getContext("2d") }; layers.set(name, L);
+    }
+    const prev = g; g = L.x;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, L.c.width, L.c.height); g.globalAlpha = 1; g.filter = "none";
+    g.scale(scale, scale);
+    paint();
+    g = prev;
+    return L.c;
+  }
+  // Cards turn around their vertical axis (yaw) with real perspective, drawn as thin vertical strips.
+  const EYE = 2600;
+  function project(cx, cy, w, h, yaw, lx, ly) {
+    const x = lx - w / 2, X = x * Math.cos(yaw), Z = x * Math.sin(yaw), s = EYE / (EYE + Z);
+    return [cx + X * s, cy + (ly - h / 2) * s, s];
+  }
+  function drawCard(src, cx, cy, w, h, yaw, { shadow = 0.16 } = {}) {
+    if (shadow > 0) {
+      const [lx] = project(cx, cy, w, h, yaw, 0, 0), [rx] = project(cx, cy, w, h, yaw, w, 0);
+      g.save(); g.filter = "blur(36px)"; g.fillStyle = `rgba(0,0,0,${shadow})`;
+      g.beginPath(); g.roundRect(lx + 30, cy - h / 2 + 50, rx - lx - 60, h * 0.96, 40); g.fill(); g.restore();
+    }
+    const N = 64;
+    for (let i = 0; i < N; i++) {
+      const u0 = i / N, u1 = (i + 1) / N;
+      const [x0, , s0] = project(cx, cy, w, h, yaw, u0 * w, 0), [x1, , s1] = project(cx, cy, w, h, yaw, u1 * w, 0);
+      const hs = h * (s0 + s1) / 2;
+      g.drawImage(src, u0 * src.width, 0, (u1 - u0) * src.width, src.height, x0, cy - hs / 2, x1 - x0 + 0.7, hs);
+    }
+  }
+  /** Words that appear one at a time, rising into place. Returns the line's width. */
+  function kinetic(t, words, x, y, t0, { size = 56, step = 0.09, dur = 0.42, align = "center", color = INK, weight = 500, rise = 30, track = -0.02 } = {}) {
+    const sp = measure(" ", size, weight, "Geist", track);
+    const ws = words.map((w) => measure(w, size, weight, "Geist", track));
+    const total = ws.reduce((a, b) => a + b, 0) + sp * (words.length - 1);
+    let cx = align === "center" ? x - total / 2 : x;
+    words.forEach((w, i) => {
+      const a = easeOut(prog(t, t0 + i * step, t0 + i * step + dur));
+      alpha(a, () => txt(w, cx, y + (1 - a) * rise, { size, weight, color, track }));
+      cx += ws[i] + sp;
+    });
+    return total;
+  }
+
+  // ---------- Reusable pieces ----------
+  // The Flow bar, drawn to the app's own spec (FlowBar.swift) at scale S (points → pixels): a 146×36 listening
+  // capsule (black 90%, a 1 pt top-lit border, soft shadow) holding the 20 pt mark and 13 bars of 3 pt over 86 pt,
+  // newest sound in the centre flowing outward; 56×32 while thinking, with just the mark.
+  const SYS = "system-ui, -apple-system, sans-serif";
+  const level = (tt) => {                              // a voice: syllables with short gaps between words
+    const syl = Math.max(0, Math.sin(tt * 12.5)) ** 0.7;
+    const word = Math.sin(tt * 2.3 + 0.6) > -0.6 ? 1 : 0.15;
+    return clamp((0.08 + 0.92 * syl * word) * (0.65 + 0.35 * Math.sin(tt * 5.3)));
+  };
+  const flowMarkX = (cx, S, think) => cx - (mix(115, 20, think) / 2 - 10) * S;
+  function flowBar(t, cx, cy, S, { think = 0, res = 1, markAlpha = 1, barsAlpha = 1 } = {}) {
+    const k = easeInOut(think);
+    const w = mix(146, 56, k) * S, h = mix(36, 32, k) * S;
+    g.save();
+    g.shadowColor = "rgba(0,0,0,0.35)"; g.shadowBlur = 10 * S; g.shadowOffsetY = 3 * S;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "rgba(0,0,0,0.9)");
+    g.restore();
+    const border = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+    border.addColorStop(0, "rgba(255,255,255,0.2)"); border.addColorStop(1, "rgba(255,255,255,0.05)");
+    rr(cx - w / 2 + 0.5 * S, cy - h / 2 + 0.5 * S, w - S, h - S, (h - S) / 2, null, border, S);
+    alpha(markAlpha, () => drawMark(flowMarkX(cx, S, k), cy, 20 * S, k > 0 ? loopRings(t * 2.6) : loopRings(0.3 + t * (0.6 + 2.2 * level(t))), { ink: "#ffffff", res: res * 2 }));
+    const on = (1 - k) * barsAlpha;
+    if (on <= 0.01) return;
+    const ww = 86 * S, x0 = flowMarkX(cx, S, k) + (10 + 9) * S, count = 13, mid = 6, barW = 3 * S;
+    const gap = (ww - barW * count) / (count - 1);
+    for (let i = 0; i < count; i++) {
+      const d = Math.abs(i - mid);
+      const sample = level(t - d / 30);
+      const env = 1 - (d * d) / (mid * mid) * 0.65;
+      const loud = sample * 1.6 / (sample * 1.6 + 0.45) * 1.25;
+      const bh = Math.max(3, 3 + 21 * Math.min(1, loud) * env) * S;
+      alpha(on * (0.45 + 0.55 * Math.min(1, sample * 2.5)), () => rr(x0 + i * (barW + gap), cy - bh / 2, barW, bh, barW / 2, "#ffffff"));
+    }
+  }
+  /** The live words above the pill: 12.5 pt medium, white 92%, on black 80% with an 11 pt corner. */
+  function flowBubble(S, cx, pillTop, width) {
+    const h = (12.5 * 1.25 + 14) * S, w = width + 24 * S;
+    rr(cx - w / 2, pillTop - 8 * S - h, w, h, 11 * S, "rgba(0,0,0,0.8)");
+    return pillTop - 8 * S - h / 2 + 12.5 * 0.36 * S;   // text baseline
+  }
+  /** A notice capsule ("Pasted · also on your clipboard"), black 88% with a hairline. */
+  function flowNotice(S, cx, cy, text) {
+    const tw = measureSys(text, 12.5 * S), w = tw + (14 * 2 + 12 + 8) * S, h = (12.5 * 1.25 + 16) * S;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "rgba(0,0,0,0.88)", "rgba(255,255,255,0.12)", S);
+    const ix = cx - w / 2 + 14 * S + 6 * S;
+    g.beginPath(); g.arc(ix, cy, 6 * S, 0, Math.PI * 2); g.fillStyle = "#fff"; g.fill();
+    check(ix, cy, 0.42 * S, "#000");
+    sysTxt(text, ix + 14 * S, cy + 12.5 * 0.36 * S, 12.5 * S, "#fff");
+  }
+  function sysTxt(s, x, y, size, color, align = "left", weight = 500) {
+    g.font = `${weight} ${size}px ${SYS}`; g.letterSpacing = "0px";
+    g.fillStyle = color; g.textAlign = align; g.textBaseline = "alphabetic"; g.fillText(s, x, y);
+  }
+  function measureSys(s, size, weight = 500) { g.font = `${weight} ${size}px ${SYS}`; g.letterSpacing = "0px"; return g.measureText(s).width; }
+  function windowChrome(w, h, title) {
+    rr(0, 0, w, h, 26, PAPER, "#e6e6ea", 2);
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(34 + i * 24, 32, 7, 0, Math.PI * 2); g.fillStyle = "#dcdce1"; g.fill(); }
+    if (title) txt(title, w / 2, 40, { size: 22, weight: 600, color: "rgba(0,0,0,0.55)", align: "center", track: 0 });
+  }
+  function ghostWindow(seed) {      // out-of-focus windows behind the action, for depth
+    return layer("ghost" + seed, 760, 480, 1, () => {
+      windowChrome(760, 480, "");
+      rr(28, 70, 190, 380, 16, "#f3f3f5");
+      for (let i = 0; i < 7; i++) rr(250, 90 + i * 46, [420, 360, 450, 300, 400, 260, 380][(i + seed) % 7], 18, 9, "#ececf0");
+    });
+  }
+
+  // =====================================================================================================
+  // Yap 1.2 launch film. Square, 60 fps. A design canvas in Yap's colours (white, blue selection, green
+  // success): the frame becomes the app, the camera glides to Pause, "Introducing…" types out, big words
+  // swap above a strip of feature screens, and everything folds back into the mark.
+  // =====================================================================================================
+  const BLUE = "#2f6bff", GREEN = "#16c172", LINE = "rgba(0,0,0,0.045)";
+  const C = W / 2;                                     // square canvas: centre on both axes
+
+  // ---------- Canvas furniture ----------
+  function grid() {}   // (kept as a hook; the film is plain white)
+  function gridLines(step = 120) {                          // faint guides, drawn in world space so they move with the camera
+    g.save(); g.strokeStyle = LINE; g.lineWidth = 2;
+    for (let x = -4 * W; x <= 5 * W; x += step) { g.beginPath(); g.moveTo(x, -4 * H); g.lineTo(x, 5 * H); g.stroke(); }
+    for (let y = -4 * H; y <= 5 * H; y += step) { g.beginPath(); g.moveTo(-4 * W, y); g.lineTo(5 * W, y); g.stroke(); }
+    g.restore();
+  }
+  function handles(x, y, w, h, color = BLUE, a = 1) { // a selection box with corner handles, like a design tool
+    alpha(a, () => {
+      g.strokeStyle = color; g.lineWidth = 3; g.strokeRect(x, y, w, h);
+      for (const [hx, hy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+        g.fillStyle = "#fff"; g.fillRect(hx - 9, hy - 9, 18, 18); g.strokeRect(hx - 9, hy - 9, 18, 18);
+      }
+    });
+  }
+  function cursor(x, y, s = 1.6, press = 0) {
+    g.save(); g.translate(x, y); g.scale(s * (1 - 0.12 * press), s * (1 - 0.12 * press));
+    g.shadowColor = "rgba(0,0,0,0.25)"; g.shadowBlur = 8; g.shadowOffsetY = 3;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.lineTo(8, 23); g.lineTo(13, 34); g.lineTo(19, 31); g.lineTo(14, 21); g.lineTo(24, 21); g.closePath();
+    g.fillStyle = INK; g.fill(); g.shadowColor = "transparent"; g.strokeStyle = PAPER; g.lineWidth = 2.5; g.lineJoin = "round"; g.stroke();
+    g.restore();
+  }
+  function ripple(x, y, p, color = GREEN) {
+    if (p <= 0 || p >= 1) return;
+    g.beginPath(); g.arc(x, y, mix(10, 90, easeOut(p)), 0, Math.PI * 2);
+    g.strokeStyle = color; g.globalAlpha *= 1 - p; g.lineWidth = 8; g.stroke(); g.globalAlpha /= Math.max(0.001, 1 - p);
+  }
+  /** Types a word on: drawn whole (so the font's kerning is kept) and revealed left to right with a soft edge. */
+  const typeCanvas = document.createElement("canvas"), tctx = typeCanvas.getContext("2d");
+  function typeOn(s, x, y, p, { size = 120, weight = 600, color = INK, align = "left", track = -0.03 } = {}) {
+    g.font = font(size, weight); g.letterSpacing = `${(track * size).toFixed(2)}px`;
+    const total = g.measureText(s).width;
+    if (p <= 0) return total;
+    const k = 2, pad = size * 0.3, w = Math.ceil((total + pad * 2) * k), h = Math.ceil(size * 1.45 * k);
+    if (typeCanvas.width < w || typeCanvas.height < h) { typeCanvas.width = Math.max(w, typeCanvas.width); typeCanvas.height = Math.max(h, typeCanvas.height); }
+    tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.globalCompositeOperation = "source-over"; tctx.clearRect(0, 0, w, h);
+    tctx.setTransform(k, 0, 0, k, 0, 0);
+    tctx.font = font(size, weight); tctx.letterSpacing = `${(track * size).toFixed(2)}px`;
+    tctx.fillStyle = color; tctx.textAlign = "left"; tctx.textBaseline = "alphabetic";
+    tctx.fillText(s, pad, size * 1.05);
+    if (p < 1) {
+      const fade = size * 1.1, head = pad + (total + fade) * p;
+      tctx.globalCompositeOperation = "destination-in";
+      const grad = tctx.createLinearGradient(head - fade, 0, head, 0);
+      grad.addColorStop(0, "rgba(0,0,0,1)"); grad.addColorStop(1, "rgba(0,0,0,0)");
+      tctx.fillStyle = grad; tctx.fillRect(0, 0, w / k, h / k);
+    }
+    const left = align === "center" ? x - total / 2 : x;
+    g.drawImage(typeCanvas, 0, 0, w, h, left - pad, y - size * 1.05, w / k, h / k);
+    return total;
+  }
+  /** A word that swaps for the next one: letters of the old one fade and lift away, the new one types on. */
+  function swapWord(t, words, times, x, y, opt) {
+    for (let i = 0; i < words.length; i++) {
+      const a = times[i], b = times[i + 1] ?? 1e9;
+      if (t < a - 0.01 || t > b + 0.35) continue;
+      const pin = prog(t, a, a + 0.45), out = easeIn(prog(t, b - 0.05, b + 0.3));
+      if (out > 0) alpha(1 - out, () => { g.save(); g.translate(0, -60 * out); g.filter = `blur(${(out * 14).toFixed(1)}px)`; typeOn(words[i], x, y, 1, opt); g.restore(); });
+      else typeOn(words[i], x, y, pin, opt);
+    }
+  }
+
+  // ---------- The app icon: the Yap mark on a rounded tile ----------
+  function appIcon(cx, cy, s, t, { fill = PAPER, ink = INK, press = 0 } = {}) {
+    g.save(); g.translate(cx, cy); g.scale(1 - 0.08 * press, 1 - 0.08 * press);
+    g.shadowColor = "rgba(0,0,0,0.18)"; g.shadowBlur = s * 0.12; g.shadowOffsetY = s * 0.04;
+    rr(-s / 2, -s / 2, s, s, s * 0.23, fill);
+    g.shadowColor = "transparent";
+    rr(-s / 2, -s / 2, s, s, s * 0.23, null, "rgba(0,0,0,0.08)", 2);
+    drawMark(0, 0, s * 0.62, drift(cfg.keys[0], t, 4), { ink, res: 1.5 });
+    g.restore();
+  }
+
+  // ---------- Real Yap UI, drawn to the app's spec (2×) ----------
+  function recordBar(cx, cy, S, t, { paused = false, secs = 12, blinkT = 0 } = {}) {
+    const w = 380 * S, h = 52 * S;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2, "rgba(0,0,0,0.88)");
+    let x = cx - w / 2 + 12 * S;
+    g.beginPath(); g.arc(x + 15 * S, cy, 15 * S, 0, Math.PI * 2); g.fillStyle = RED; g.fill();       // stop
+    rr(x + 10 * S, cy - 5 * S, 10 * S, 10 * S, 2 * S, "#fff");
+    x += 30 * S + 12 * S;
+    g.beginPath(); g.arc(x + 15 * S, cy, 15 * S, 0, Math.PI * 2); g.fillStyle = "rgba(255,255,255,0.16)"; g.fill();
+    if (paused) { g.beginPath(); g.arc(x + 15 * S, cy, 6 * S, 0, Math.PI * 2); g.fillStyle = RED; g.fill(); g.strokeStyle = "#fff"; g.lineWidth = 2 * S; g.beginPath(); g.arc(x + 15 * S, cy, 9 * S, 0, Math.PI * 2); g.stroke(); }
+    else { rr(x + 9 * S, cy - 7 * S, 4 * S, 14 * S, 1 * S, "#fff"); rr(x + 17 * S, cy - 7 * S, 4 * S, 14 * S, 1 * S, "#fff"); }
+    const pauseX = x + 15 * S;
+    x += 30 * S + 12 * S;
+    const label = paused ? `Paused · 0:${String(secs).padStart(2, "0")}` : `0:${String(secs).padStart(2, "0")}`;
+    alpha(paused ? (Math.floor(blinkT * 2) % 2 === 0 ? 1 : 0.55) : 1, () => sysTxt(label, x, cy + 5 * S, 14 * S, "#fff", "left", 600));
+    // camera, full screen, trash on the right
+    let rx = cx + w / 2 - 12 * S - 8 * S;
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(rx, cy, 7 * S, 0, Math.PI * 2); g.strokeStyle = "rgba(255,255,255,0.85)"; g.lineWidth = 1.6 * S; g.stroke(); rx -= 30 * S; }
+    return pauseX;
+  }
+
+  // ---------- Scene A · the frame becomes the app (0 – 1.8) ----------
+  function sceneA(t) {
+    const shrink = easeInOut(prog(t, 0.25, 0.85));
+    const press = Math.sin(Math.PI * prog(t, 1.02, 1.22));
+    const open = easeInOut(prog(t, 1.3, 1.85));
+    camera(t, C, C, mix(1, 1.08, prog(t, 0, 1.3)) * mix(1, 2.6, easeIn(open)), 0, () => {
+      grid();
+      // The Yap mark rolls in (its startup animation), then settles into the app icon.
+      const into = easeInOut(prog(t, 0.55, 0.95));
+      alpha(easeOut(prog(t, 0.55, 0.85)), () => {
+        g.save(); g.translate(C, C); const sc = mix(1.9, 1, into); g.scale(sc, sc);
+        g.shadowColor = "rgba(0,0,0,0.18)"; g.shadowBlur = 30; g.shadowOffsetY = 10;
+        rr(-130, -130, 260, 260, 60, PAPER); g.shadowColor = "transparent";
+        rr(-130, -130, 260, 260, 60, null, "rgba(0,0,0,0.08)", 2);
+        g.restore();
+      });
+      const st = prog(t, 0.05, 0.85), e0 = easeOut(st);
+      const rings0 = cfg.keys[0].map(([x, y], i) => {
+        const ang = Math.atan2(y || -1, x || 0.001) + i * 0.4;
+        return [x + (Math.cos(ang) * 330 - x) * (1 - e0), y + (Math.sin(ang) * 330 - y) * (1 - e0)];
+      });
+      drawMark(C, C, mix(560, 260 * 0.62, into), t < 0.9 ? rings0 : drift(cfg.keys[0], t - 0.9, 4), { rim: easeOut(clamp(st * 1.25)), res: 1.2 });
+      // The pointer comes in and clicks it.
+      const m = easeOut(prog(t, 0.55, 1.0));
+      const px = mix(C + 520, C + 70, m), py = mix(C + 560, C + 80, m);
+      ripple(C, C, prog(t, 1.1, 1.6));
+      if (t < 1.55) cursor(px, py, 1.7, press);
+    });
+    // The app opens: a white window grows out of the icon.
+    alpha(easeOut(prog(t, 1.4, 1.75)), () => { g.fillStyle = "#f6f7f9"; g.fillRect(0, 0, W, H); });
+  }
+
+  // ---------- Scene B · glide to Pause (1.7 – 3.6) ----------
+  function sceneB(t) {
+    const u = t - 1.7;
+    const arrive = easeOut(prog(u, 0, 0.5));
+    const glide = easeInOut(prog(u, 0.35, 1.25));
+    const into = easeIn(prog(t, 3.25, 3.6));
+    const S = 2.4, barY = 1500;
+    camera(t, mix(700, 860, glide), mix(760, 1380, glide), mix(1.25, 1, arrive) * mix(1, 1.9, glide) * mix(1, 9, into), mix(-0.02, 0, arrive), () => {
+      g.fillStyle = "#f6f7f9"; g.fillRect(-W, -H, 3 * W, 3 * H);
+      // A document being recorded.
+      rr(200, 260, 1520, 1500, 30, PAPER, "#e4e6ea", 2);
+      for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(250 + i * 30, 305, 9, 0, Math.PI * 2); g.fillStyle = "#dcdce1"; g.fill(); }
+      rr(240, 360, 300, 1360, 18, "#f4f4f6");
+      for (let i = 0; i < 7; i++) rr(275, 400 + i * 64, i === 2 ? 210 : 160, 24, 12, i === 2 ? "#cfcfd6" : "#e3e3e8");
+      txt("Yap 1.2", 600, 470, { size: 84, weight: 600 });
+      for (let i = 0; i < 9; i++) rr(600, 540 + i * 62, [900, 820, 960, 700, 880, 600, 930, 760, 540][i], 26, 13, "#ececf0");
+      // Yap's recording bar, paused with a click.
+      const paused = t >= 2.86;
+      const secs = paused ? 12 : Math.min(12, Math.floor(4 + u * 6));
+      const pauseX = recordBar(960, barY, S, t, { paused, secs, blinkT: t });
+      const m = easeInOut(prog(u, 0.55, 1.05));
+      cursor(mix(1200, pauseX + 8, m), mix(1050, barY + 10, m), 2.2, Math.sin(Math.PI * prog(t, 2.8, 2.95)));
+      ripple(pauseX, barY, prog(t, 2.86, 3.3), GREEN);
+    });
+    alpha(easeIn(prog(t, 3.4, 3.6)), () => { g.fillStyle = PAPER; g.fillRect(0, 0, W, H); });
+  }
+
+  // ---------- Scene C · Introducing… Yap 1.2 (3.5 – 5.6) ----------
+  const PILLS = ["Pause & resume", "Remove ums", "Full-screen camera", "No distractions", "Pause Yap", "Styles per app",
+    "Auto language", "Backup", "Choose your folders", "Meeting prompts", "Mic priority", "Storage", "Share", "Rename"];
+  function pill(text, x, y, color) {
+    const w = measureSys(text, 42, 500) + 110;
+    rr(x, y - 46, w, 92, 46, PAPER, "#e3e5ea", 2);
+    for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + 38 + i * 12, y + (i === 1 ? -8 : 5), 5, 0, Math.PI * 2); g.fillStyle = color; g.fill(); }
+    sysTxt(text, x + 86, y + 14, 42, "#3a3a3f");
+    return w;
+  }
+  function sceneC(t) {
+    const u = t - 3.5;
+    const reveal = easeInOut(prog(u, 0.95, 1.4));          // "Introducing…" gives way to the big word
+    camera(t, C, C, mix(1.35, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 1.06, prog(u, 0.9, 2.1)), 0, () => {
+      grid();
+      // The pill in a selection box.
+      alpha(1 - reveal, () => {
+        const pw = 1180, ph = 230;
+        g.save(); g.shadowColor = "rgba(0,0,0,0.10)"; g.shadowBlur = 40; g.shadowOffsetY = 10;
+        rr(C - pw / 2, C - ph / 2, pw, ph, 30, PAPER); g.restore();
+        rr(C - pw / 2, C - ph / 2, pw, ph, 30, null, "#e6e8ed", 2);
+        for (let i = 0; i < 4; i++) {           // a little loading dance, blue and green
+          const bob = Math.sin(t * 9 - i * 0.9) * 6;
+          g.beginPath(); g.arc(C - pw / 2 + 100 + (i % 2) * 34, C + (i < 2 ? -18 : 18) + bob, 12, 0, Math.PI * 2); g.fillStyle = i % 2 ? GREEN : BLUE; g.fill();
+        }
+        typeOn("Introducing…", C - pw / 2 + 200, C + 40, prog(u, 0.1, 0.75), { size: 116, weight: 600 });
+      });
+      // Yap 1.2 in a cloud of what's new, rows drifting opposite ways.
+      alpha(reveal, () => {
+        const rows = [[C - 700, 1], [C - 520, -1], [C + 470, 1], [C + 650, -1]];
+        rows.forEach(([y, dir], r) => {
+          let x = -300 + dir * (t * 70) + r * 140;
+          for (let k = 0; k < 14; k++) {
+            const item = PILLS[(k + r * 4) % PILLS.length];
+            x += pill(item, x, y, (k + r) % 2 ? GREEN : BLUE) + 26;
+          }
+        });
+        typeOn("Yap 1.2", C, C + 90, prog(u, 1.0, 1.55), { size: 330, weight: 700, align: "center", track: -0.045 });
+      });
+    });
+  }
+
+  // ---------- Scene D · big words over the features (5.5 – 11.8) ----------
+  const BEATS = [
+    ["pause.", 5.55, "Pause and resume recordings"],
+    ["tidy.", 6.8, "Remove ums and long pauses"],
+    ["focus.", 8.05, "No icons, no banners"],
+    ["notes.", 9.3, "“Take meeting notes?” when a call starts"],
+    ["back up.", 10.55, "Everything, in one file"],
+  ];
+  const CARD = { w: 1240, h: 760, y: 1310, gap: 160 };
+  function featureCard(i, t) {
+    return layer("card" + i, CARD.w, CARD.h, 1, () => {
+      rr(0, 0, CARD.w, CARD.h, 36, PAPER, "#e4e6eb", 2);
+      const lt = t - BEATS[i][1];                       // time since this beat began
+      if (i === 0) {                                     // the recording bar, paused, over a doc
+        for (let k = 0; k < 6; k++) rr(90, 110 + k * 60, [700, 620, 760, 520, 660, 440][k], 24, 12, "#ececf0");
+        recordBar(CARD.w / 2, 560, 2.2, t, { paused: lt > 0.35, secs: 24, blinkT: t });
+      } else if (i === 1) {                              // a transcript: the ums drop out and the waveform closes up
+        const words = ["So", "um", "today", "we", "ship", "uh", "1.2"];
+        let x = 110;
+        const gone = easeInOut(prog(lt, 0.3, 0.8));
+        words.forEach((w, k) => {
+          const filler = w === "um" || w === "uh";
+          const ww = measureSys(w + " ", 58, 600);
+          alpha(filler ? 1 - gone : 1, () => {
+            g.save(); g.translate(x, 300 + (filler ? gone * 60 : 0));
+            if (filler) { rr(-12, -58, ww, 78, 14, "rgba(47,107,255,0.12)"); }
+            sysTxt(w, 0, 0, 58, filler ? BLUE : INK, "left", 600); g.restore();
+          });
+          x += filler ? ww * (1 - gone) : ww;
+        });
+        // waveform with its pauses taken out
+        const bars = 46;
+        for (let k = 0; k < bars; k++) {
+          const quiet = (k > 12 && k < 18) || (k > 30 && k < 35);
+          const hgt = quiet ? 6 * (1 - gone) : 20 + 90 * Math.abs(Math.sin(k * 1.7) * Math.sin(k * 0.6 + 1));
+          if (quiet && gone > 0.98) continue;
+          const xx = 110 + k * 22 * mix(1, 0.86, quiet ? 0 : gone);
+          rr(xx, 520 - hgt / 2, 12, Math.max(4, hgt), 6, quiet ? "#cfd3db" : GREEN);
+        }
+      } else if (i === 2) {                              // desktop icons covered by the wallpaper; a banner bounces off
+        const wall = g.createLinearGradient(0, 0, CARD.w, CARD.h); wall.addColorStop(0, "#dfe9ff"); wall.addColorStop(1, "#dff7ea");
+        g.save(); g.beginPath(); g.roundRect(0, 0, CARD.w, CARD.h, 36); g.clip();
+        g.fillStyle = wall; g.fillRect(0, 0, CARD.w, CARD.h);
+        const cover = easeInOut(prog(lt, 0.25, 0.7));
+        for (let k = 0; k < 8; k++) {
+          alpha(1 - cover, () => { rr(CARD.w - 170 - (k % 2) * 130, 90 + Math.floor(k / 2) * 150, 90, 90, 18, k % 3 ? "#ffffff" : "#c9d6ff");
+            sysTxt(["Notes.pdf", "todo.txt", "IMG_2042", "Q3 deck", "invoice", "draft", "logo.png", "keys.txt"][k], CARD.w - 215 - (k % 2) * 130, 205 + Math.floor(k / 2) * 150, 20, "#4a4a50"); });
+        }
+        const bounce = prog(lt, 0.55, 1.15);
+        alpha(1 - easeIn(bounce), () => {
+          const by = 70 - 160 * easeIn(bounce);
+          rr(90, by, 560, 110, 24, "rgba(255,255,255,0.92)", "rgba(0,0,0,0.06)", 2);
+          sysTxt("Messages · “are you free later?”", 130, by + 66, 28, "#2a2a2e", "left", 500);
+        });
+        g.restore();
+        recordBar(CARD.w / 2, 640, 1.6, t, { secs: 31 });
+      } else if (i === 3) {                              // the call prompt, top right, as in the app
+        rr(80, 80, 640, 420, 22, "#f4f4f6");
+        for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(150 + (k % 2) * 260, 190 + Math.floor(k / 2) * 190, 64, 0, Math.PI * 2); g.fillStyle = ["#cfe0ff", "#d7f5e5", "#e8e8ee", "#cfe0ff"][k]; g.fill(); }
+        const pop = backOut(prog(lt, 0.15, 0.55));
+        if (pop > 0) {
+          g.save(); g.translate(CARD.w - 120, 150); g.scale(pop, pop); g.translate(-(CARD.w - 120), -150);
+          const px = CARD.w - 120 - 560, py = 90;
+          rr(px, py, 560, 190, 26, "rgba(0,0,0,0.88)");
+          sysTxt("Zoom is using your mic.", px + 32, py + 62, 30, "#fff", "left", 600);
+          sysTxt("Take meeting notes?", px + 32, py + 102, 30, "#fff", "left", 600);
+          const take = lt > 0.85;
+          rr(px + 32, py + 124, 190, 46, 12, take ? GREEN : BLUE);
+          sysTxt(take ? "Taking notes" : "Take Notes", px + 54, py + 156, 24, "#fff", "left", 600);
+          rr(px + 238, py + 124, 150, 46, 12, "rgba(255,255,255,0.16)");
+          sysTxt("Not Now", px + 262, py + 156, 24, "#fff", "left", 500);
+          g.restore();
+          if (lt > 0.62 && lt < 0.9) cursor(CARD.w - 560, 250, 1.6, Math.sin(Math.PI * prog(lt, 0.74, 0.86)));
+        }
+      } else if (i === 4) {                              // a backup file moving to a new Mac
+        const mv = easeInOut(prog(lt, 0.3, 0.95));
+        for (const [mx, label] of [[230, "This Mac"], [CARD.w - 230, "New Mac"]]) {
+          rr(mx - 170, 240, 340, 220, 18, "#f4f4f6", "#e1e3e8", 3); rr(mx - 40, 460, 80, 30, 6, "#e1e3e8"); rr(mx - 100, 490, 200, 14, 7, "#e1e3e8");
+          sysTxt(label, mx, 560, 30, "#55555b", "center", 500);
+        }
+        const fx = mix(230, CARD.w - 230, mv), fy = 300 - Math.sin(Math.PI * mv) * 120;
+        g.save(); g.shadowColor = "rgba(0,0,0,0.15)"; g.shadowBlur = 24; g.shadowOffsetY = 8;
+        rr(fx - 70, fy - 10, 140, 170, 16, PAPER, BLUE, 3); g.restore();
+        sysTxt(".yapbackup", fx, fy + 190, 24, BLUE, "center", 600);
+        if (mv >= 1) { g.beginPath(); g.arc(fx, fy + 75, 30, 0, Math.PI * 2); g.fillStyle = GREEN; g.fill(); check(fx, fy + 75, 1.6, "#fff"); }
+      }
+    });
+  }
+  function sceneD(t) {
+    const u = t - 5.5;
+    const idx = BEATS.reduce((n, b, i) => (t >= b[1] ? i : n), 0);
+    // The strip slides one card along per word; the camera eases with it.
+    let pos = 0;
+    BEATS.forEach((b, i) => { if (i > 0) pos += easeInOut(prog(t, b[1] - 0.15, b[1] + 0.4)); });
+    const out = easeInOut(prog(t, 11.55, 12.05));
+    camera(t, C, C, mix(1.12, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 0.55, out), 0, () => {
+      grid();
+      swapWord(t, BEATS.map((b) => b[0]), BEATS.map((b) => b[1]), C, 640, { size: 260, weight: 700, align: "center", track: -0.045 });
+      alpha(1 - out, () => kinetic(t, [BEATS[idx][2]], C, 820, BEATS[idx][1] + 0.2, { size: 46, color: MUTED, rise: 18, track: -0.01 }));
+      // Two dots above the word: blue then green, like the reference's avatar pair.
+      for (let k = 0; k < 2; k++) { g.beginPath(); g.arc(C - 34 + k * 68, 330, 46, 0, Math.PI * 2); g.fillStyle = k ? GREEN : BLUE; g.fill(); g.strokeStyle = PAPER; g.lineWidth = 8; g.stroke(); }
+      check(C + 34, 330, 2.2, "#fff");
+      drawMark(C - 34, 330, 56, drift(cfg.keys[0], t, 5), { ink: "#ffffff", res: 2 });
+      BEATS.forEach((b, i) => {
+        const x = C + (i - pos) * (CARD.w + CARD.gap);
+        if (Math.abs(x - C) > W) return;
+        const yaw = -(i - pos) * 0.35;
+        drawCard(featureCard(i, Math.max(t, b[1] - 0.5)), x, CARD.y, CARD.w, CARD.h, yaw, { shadow: 0.12 });
+      });
+    });
+  }
+
+  // ---------- Scene E · it all folds into the mark (11.8 – 15) ----------
+  function sceneE(t) {
+    const u = t - 11.8;
+    const fold = easeInOut(prog(u, 0, 0.6));
+    const f = prog(t, 12.1, 13.0), fe = easeInOut(f);
+    camera(t, C, C, mix(0.55, 1, easeOut(prog(u, 0, 0.8))) * mix(1, 1.05, prog(u, 0.8, 3.2)), 0, () => {
+      grid();
+      // The feature cards rush in and shrink into a selection box…
+      for (let i = 0; i < 5; i++) {
+        const ang = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        const x = mix(C + Math.cos(ang) * 1300, C, fold), y = mix(C + Math.sin(ang) * 1300, C - 120, fold);
+        const s = mix(0.45, 0.08, fold);
+        alpha(1 - easeIn(prog(u, 0.35, 0.6)), () => rr(x - CARD.w * s / 2, y - CARD.h * s / 2, CARD.w * s, CARD.h * s, 30 * s, PAPER, "#dfe2e8", 2));
+      }
+      // …where the mark lands and flows through its keyframes, then settles.
+      const size = mix(60, 400, fe);
+      const land = t - 13.0;
+      const sz = land > 0 ? size * (1 + 0.04 * Math.exp(-land * 6) * Math.sin(land * 18)) : size;
+      const rings = f <= 0 ? cfg.keys[0] : f < 1 ? loopRings(LOOP * fe) : drift(cfg.keys[0], land, cfg.idleDrift * easeOut(prog(land, 0, 0.8)));
+      alpha(easeOut(prog(u, 0.25, 0.5)), () => drawMark(C, C - 120, sz, rings, { res: Math.max(1.1, 90 / sz) }));
+      typeOn("Yap 1.2", C, C + 380, prog(t, 13.15, 13.7), { size: 190, weight: 700, align: "center", track: -0.04 });
+      kinetic(t, ["Free", "for", "Mac", "·", "out", "now"], C, C + 500, 13.7, { size: 52, step: 0.06, color: MUTED, rise: 18 });
+      alpha(easeOut(prog(t, 14.05, 14.4)), () => {
+        g.beginPath(); g.arc(C - 230, C + 620, 12, 0, Math.PI * 2); g.fillStyle = GREEN; g.fill();
+        txt("yap.primitive8.cc", C - 200, C + 637, { size: 46, weight: 500, color: INK });
+      });
+    });
+  }
+
+  const LOOP = (cfg.holdMs + cfg.moveMs) / 1000 * (frames.length - 1);
+
+  // ---------- The edit ----------
+  function frame(t) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1; g.filter = "none";
+    g.fillStyle = PAPER; g.fillRect(0, 0, W, H);
+    if (t < 1.8) sceneA(t);
+    if (t >= 1.7 && t < 3.62) alpha(easeOut(prog(t, 1.7, 1.85)), () => sceneB(t));
+    if (t >= 3.5 && t < 5.7) alpha(easeOut(prog(t, 3.5, 3.7)) * (1 - easeInOut(prog(t, 5.45, 5.7))), () => sceneC(t));
+    if (t >= 5.45 && t < 12.15) alpha(easeOut(prog(t, 5.45, 5.7)), () => sceneD(t));
+    if (t >= 11.8) alpha(easeOut(prog(t, 11.8, 12.0)), () => sceneE(t));
+  }
+  // Motion blur on the fast moves: several moments inside one frame's shutter, averaged.
+  const BLUR = [[1.3, 1.9], [3.22, 3.62], [5.45, 5.75], [6.62, 6.98], [7.87, 8.23], [9.12, 9.48], [10.37, 10.73], [11.55, 12.25]];
+  const acc = document.createElement("canvas"); acc.width = W; acc.height = H;
+  const accCtx = acc.getContext("2d");
+  function draw(t) {
+    t = clamp(t, 0, DUR);
+    const fast = BLUR.some(([a, b]) => t >= a && t <= b);
+    if (!fast) { g = main; frame(t); return; }
+    const n = 6, shutter = 0.6 / FPS;
+    main.setTransform(1, 0, 0, 1, 0, 0); main.globalAlpha = 1; main.filter = "none";
+    for (let i = 0; i < n; i++) {
+      g = accCtx;
+      frame(t + shutter * (i / (n - 1) - 0.5));
+      main.globalAlpha = 1 / (i + 1);
+      main.drawImage(acc, 0, 0);
+    }
+    main.globalAlpha = 1;
+    g = main;
+  }
+
+  // ---------- Preview ----------
+  const $ = (id) => document.getElementById(id);
+  let playing = true, t0 = performance.now(), cur = Number(new URLSearchParams(location.search).get("t")) || 0;
+  let exporting = false;
+  const sound = $("sfx");
+  function tick(now) {
+    if (playing && !exporting) cur = ((now - t0) / 1000) % DUR;
+    if (playing && !exporting && sound.readyState >= 2) {
+      if (sound.paused) sound.play().catch(() => {});
+      if (Math.abs(sound.currentTime - cur) > 0.08) sound.currentTime = cur;
+    } else if (!sound.paused) sound.pause();
+    if (!exporting) { draw(cur); $("scrub").value = cur; $("time").textContent = cur.toFixed(2); }
+    requestAnimationFrame(tick);
+  }
+  $("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "Pause" : "Play"; t0 = performance.now() - cur * 1000; };
+  $("scrub").oninput = (e) => { playing = false; $("play").textContent = "Play"; cur = Number(e.target.value); };
+  window.renderAt = (t) => { playing = false; cur = t; draw(t); };
+
+  // ---------- Export ----------
+  // The soundtrack: music + effects (audio/mix.wav), or the effects alone if there's no mix yet.
+  const SOUNDS = ["audio-v12/mix.wav", "audio-v12/sfx.wav"];
+  async function soundURL() {
+    for (const u of SOUNDS) { try { if ((await fetch(u, { method: "HEAD", cache: "no-store" })).ok) return u; } catch (_) {} }
+    return null;
+  }
+  async function loadSound() {
+    try {
+      const u = await soundURL();
+      if (!u) return null;
+      const r = await fetch(u, { cache: "no-store" });
+      return await new OfflineAudioContext(2, 48000 * DUR, 48000).decodeAudioData(await r.arrayBuffer());
+    } catch (_) { return null; }
+  }
+  soundURL().then((u) => { if (u) document.getElementById("sfx").src = u; });
+  async function save(name, blob) {
+    const r = await fetch(`out/${name}`, { method: "PUT", body: blob });
+    if (!r.ok) throw new Error(`Saving ${name} failed (${r.status}). Is serve.mjs running?`);
+  }
+  async function exportFilm(name = "yap-launch-v12") {
+    if (exporting) return;
+    exporting = true;
+    const status = (s) => { $("status").textContent = s; };
+    try {
+      let config = null;
+      for (const codec of ["avc1.640033", "avc1.640032", "avc1.640028", "avc1.4d0034"]) {
+        const c = { codec, width: W, height: H, bitrate: 30_000_000, framerate: FPS, avc: { format: "avc" } };
+        try { if ((await VideoEncoder.isConfigSupported(c)).supported) { config = c; break; } } catch (_) {}
+      }
+      if (!config) throw new Error("This browser can't encode H.264");
+      const audio = await loadSound();
+      let aconf = null;
+      if (audio) for (const [codec, mux] of [["mp4a.40.2", "aac"], ["opus", "opus"]]) {
+        const c = { codec, sampleRate: audio.sampleRate, numberOfChannels: 2, bitrate: 192_000 };
+        try { if ((await AudioEncoder.isConfigSupported(c)).supported) { aconf = { c, mux }; break; } } catch (_) {}
+      }
+      const muxer = new Mp4Muxer.Muxer({
+        target: new Mp4Muxer.ArrayBufferTarget(),
+        video: { codec: "avc", width: W, height: H, frameRate: FPS },
+        ...(aconf ? { audio: { codec: aconf.mux, numberOfChannels: 2, sampleRate: audio.sampleRate } } : {}),
+        fastStart: "in-memory",
+      });
+      let failure = null;
+      const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { failure = e; } });
+      enc.configure(config);
+      const total = DUR * FPS;
+      for (let i = 0; i < total; i++) {
+        if (failure) throw failure;
+        draw(i / FPS);
+        const frame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+        enc.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
+        frame.close();
+        if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0));
+        if (i % 10 === 0) { status(`Rendering ${Math.round(i / total * 100)}%`); await new Promise((r) => setTimeout(r, 0)); }
+      }
+      await enc.flush(); enc.close();
+      if (aconf) {
+        status("Encoding sound");
+        const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: (e) => { failure = e; } });
+        aenc.configure(aconf.c);
+        const sr = audio.sampleRate, len = Math.min(audio.length, Math.round(DUR * sr)), step = 4800;
+        const L = audio.getChannelData(0), R = audio.numberOfChannels > 1 ? audio.getChannelData(1) : L;
+        for (let i = 0; i < len; i += step) {
+          const n = Math.min(step, len - i), data = new Float32Array(n * 2);
+          data.set(L.subarray(i, i + n), 0); data.set(R.subarray(i, i + n), n);
+          const ad = new AudioData({ format: "f32-planar", sampleRate: sr, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / sr * 1e6), data });
+          aenc.encode(ad); ad.close();
+        }
+        await aenc.flush(); aenc.close();
+        if (failure) throw failure;
+      }
+      muxer.finalize();
+      const mp4 = new Blob([muxer.target.buffer], { type: "video/mp4" });
+      await save(`${name}.mp4`, mp4);
+      draw(14.6);
+      await save(`${name}-poster.png`, await new Promise((r) => canvas.toBlob(r, "image/png")));
+      status(`Saved out/${name}.mp4 (${(mp4.size / 1e6).toFixed(1)} MB${aconf ? ", with sound" : ", silent"}) and the poster`);
+      window.exportResult = { ok: true, bytes: mp4.size, sound: aconf ? aconf.mux : null };
+    } catch (e) {
+      status(e.message || String(e));
+      window.exportResult = { ok: false, error: e.message || String(e) };
+    } finally {
+      exporting = false;
+    }
+  }
+  $("export").onclick = () => exportFilm();
+  window.exportFilm = exportFilm;
+
+  Promise.all([document.fonts.load(font(88, 500)), document.fonts.load(font(40, 600)), document.fonts.load(font(28, 500, "Geist Mono"))])
+    .then(async () => {
+      t0 = performance.now() - cur * 1000; requestAnimationFrame(tick);
+      // launch.html?export=<name>&return=<url>: render on load, then go back (used by the sound mixer).
+      const q = new URLSearchParams(location.search);
+      if (q.has("export")) {
+        await exportFilm(q.get("export"));
+        const back = q.get("return");
+        if (back && back.startsWith("/") && window.exportResult?.ok) location.href = back;
+      }
+    });
+})();
+</script>
+</body>
+</html>
