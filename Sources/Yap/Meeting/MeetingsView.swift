@@ -81,6 +81,15 @@ private struct MeetingDetail: View {
     @ObservedObject var store: MeetingStore
     @StateObject private var player = AudioPlayer()
     @Local private var query = ""
+    @Local private var title = ""
+    @Local private var pendingRename = false
+
+    private func rename() {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard pendingRename, !t.isEmpty, t != meeting.title else { return }
+        pendingRename = false
+        var m = meeting; m.title = t; store.update(m)
+    }
 
     private var lines: [Meeting.Line] {
         query.isEmpty ? meeting.lines : meeting.lines.filter { $0.text.localizedCaseInsensitiveContains(query) }
@@ -90,7 +99,11 @@ private struct MeetingDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(meeting.title).font(.title2.weight(.semibold)).textSelection(.enabled)
+                    TextField("Title", text: $title)
+                        .textFieldStyle(.plain).font(.title2.weight(.semibold))
+                        .onSubmit { rename() }
+                        .onChange(of: title) { _, _ in pendingRename = true }
+                        .onDisappear { rename() }
                     Text("\(meeting.created.formatted(date: .complete, time: .shortened)) · \(Polisher.stamp(meeting.duration))")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -100,6 +113,8 @@ private struct MeetingDetail: View {
                     Spacer()
                     Button { copy(meeting.markdown) } label: { Label("Copy Notes", systemImage: "doc.on.doc") }
                         .help("Copy the summary, action items and transcript as Markdown")
+                    ShareLink(item: meeting.markdown, subject: Text(meeting.title)) { Label("Share", systemImage: "square.and.arrow.up") }
+                        .help("Share the notes: Mail, Messages, Notes and more")
                 }
 
                 if !meeting.summary.isEmpty {
@@ -146,7 +161,7 @@ private struct MeetingDetail: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear { player.load(meeting.audio) }
+        .onAppear { player.load(meeting.audio); title = meeting.title; pendingRename = false }
         .onDisappear { player.pause() }
     }
 

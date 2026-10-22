@@ -96,6 +96,9 @@ private struct RecordingRow: View {
     let recording: Recording
     let library: LibraryStore
     @Local private var thumb: NSImage?
+    @Local private var editing = false
+    @Local private var name = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -105,7 +108,18 @@ private struct RecordingRow: View {
             }
             .frame(width: 96, height: 60).clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 3) {
-                Text(recording.title).font(.callout.weight(.medium)).lineLimit(2)
+                if editing {
+                    TextField("Title", text: $name)
+                        .textFieldStyle(.roundedBorder).font(.callout.weight(.medium))
+                        .focused($focused)
+                        .onSubmit { commit() }
+                        .onExitCommand { editing = false }
+                        .onChange(of: focused) { _, f in if !f { commit() } }
+                } else {
+                    Text(recording.title).font(.callout.weight(.medium)).lineLimit(2)
+                        .onTapGesture(count: 2) { startRename() }
+                        .help("Double-click to rename")
+                }
                 HStack(spacing: 6) {
                     Text(recording.created, format: .dateTime.month().day().hour().minute())
                     if let d = recording.meta?.duration, d > 0 { Text("· \(Polisher.stamp(d))") }
@@ -116,6 +130,22 @@ private struct RecordingRow: View {
         .padding(.vertical, 3)
         .task { thumb = await library.thumbnail(for: recording.url) }
         .onDrag { NSItemProvider(contentsOf: recording.url) ?? NSItemProvider() }
+        .contextMenu {
+            Button("Rename") { startRename() }
+            ShareLink(item: recording.url) { Label("Share…", systemImage: "square.and.arrow.up") }
+            Button("Copy Video") { RecordingController.copyFileToClipboard(recording.url) }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([recording.url]) }
+            Divider()
+            Button("Move to Trash", role: .destructive) { library.trash(recording) }
+        }
+    }
+
+    private func startRename() { name = recording.title; editing = true; DispatchQueue.main.async { focused = true } }
+    private func commit() {
+        guard editing else { return }
+        editing = false
+        let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty, t != recording.title { library.rename(recording, to: t) }
     }
 }
 
@@ -129,6 +159,12 @@ private struct RecordingDetail: View {
     @Local private var busy = false
     @Local private var blurring = false
     @Local private var reloadToken = UUID()
+    @FocusState private var titleFocused: Bool
+
+    private func saveTitle() {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !t.isEmpty, t != recording.title { library.rename(recording, to: t) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -138,7 +174,9 @@ private struct RecordingDetail: View {
                 VStack(alignment: .leading, spacing: 14) {
                     TextField("Title", text: $title)
                         .textFieldStyle(.plain).font(.title2.weight(.semibold))
-                        .onSubmit { library.rename(recording, to: title) }
+                        .focused($titleFocused)
+                        .onSubmit { saveTitle() }
+                        .onChange(of: titleFocused) { _, f in if !f { saveTitle() } }
                     actions
                     if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
                     if let meta = recording.meta {
@@ -208,6 +246,8 @@ private struct RecordingDetail: View {
             Button { RecordingController.copyFileToClipboard(recording.url); status = "Video copied: paste it into Slack, Mail, Linear…" } label: {
                 Label("Copy Video", systemImage: "doc.on.doc")
             }
+            ShareLink(item: recording.url) { Label("Share", systemImage: "square.and.arrow.up") }
+                .help("AirDrop, Mail, Messages and more")
             if let meta = recording.meta, !meta.segments.isEmpty {
                 Button {
                     let pb = NSPasteboard.general
