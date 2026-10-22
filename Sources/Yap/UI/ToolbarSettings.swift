@@ -339,6 +339,7 @@ private struct RecordingColumns: View {
     @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
+    @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
 
     var body: some View {
         Section {
@@ -362,6 +363,7 @@ private struct RecordingColumns: View {
                 Toggle("Count down 3, 2, 1", isOn: $countdown)
                 Toggle("Highlight clicks", isOn: $clicks)
                 Toggle("Show keyboard shortcuts on screen", isOn: $showKeystrokes)
+                Toggle("Hide desktop icons and notifications", isOn: $hideDistractions)
             }
             Row("When I stop") {
                 Toggle("Copy the video, ready to paste", isOn: $autoCopy)

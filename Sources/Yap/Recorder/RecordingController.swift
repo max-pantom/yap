@@ -9,6 +9,10 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var startedAt: Date?
     @Published private(set) var processingStatus = ""
+    @Published private(set) var isPaused = false
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+    private let cover = DesktopCover()
 
     let camera = CameraBubble()
     private var recorder: ScreenRecorder?
@@ -24,6 +28,35 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
     }
 
     var isActive: Bool { phase == .countdown || phase == .recording }
+
+    /// Recording time so far, not counting pauses.
+    func elapsed(at now: Date = Date()) -> TimeInterval {
+        guard let startedAt else { return 0 }
+        return now.timeIntervalSince(startedAt) - pausedTotal - (pausedAt.map { now.timeIntervalSince($0) } ?? 0)
+    }
+
+    // MARK: Pause
+
+    func togglePause() { Task { isPaused ? await resume() : await pause() } }
+
+    func pause() async {
+        guard phase == .recording, let recorder, !isPaused else { return }
+        isPaused = true
+        pausedAt = Date()
+        clicks.pause()
+        do { try await recorder.pause() } catch { fail(error); return }
+        Sounds.stop()
+    }
+
+    func resume() async {
+        guard phase == .recording, let recorder, isPaused else { return }
+        do { try await recorder.resume() } catch { fail(error); return }
+        if let p = pausedAt { pausedTotal += Date().timeIntervalSince(p) }
+        pausedAt = nil
+        isPaused = false
+        clicks.resume()
+        Sounds.start()
+    }
 
     func toggle() {
         switch phase {
@@ -50,13 +83,14 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
             let me = content.applications.filter { $0.processID == getpid() }
             var shown = Set<CGWindowID>()
             if let n = camera.windowNumber { shown.insert(CGWindowID(n)) }
-            let overlayID = keystrokes.prepare(on: screen)
-            if let overlayID { shown.insert(overlayID) }
-            // The overlay was just ordered in, so look again if the first list predates it.
-            let windows = overlayID.map { id in content.windows.contains { $0.windowID == id } } == false
-                ? (try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)).windows : content.windows
+            if let overlayID = keystrokes.prepare(on: screen) { shown.insert(overlayID) }
+            shown.formUnion(cover.show(on: screen))          // the wallpaper over the desktop icons
+            // The overlay and cover were just ordered in, so look again if the first list predates them.
+            let known = Set(content.windows.map(\.windowID))
+            let windows = shown.isSubset(of: known)
+                ? content.windows : (try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)).windows
             let bubble = windows.filter { shown.contains($0.windowID) }
-            let filter = SCContentFilter(display: display, excludingApplications: me, exceptingWindows: bubble)
+            let filter = SCContentFilter(display: display, excludingApplications: me + DesktopCover.quietApps(in: content), exceptingWindows: bubble)
             await begin(with: filter, screen: screen?.frame)
         } catch {
             fail(error)
@@ -97,7 +131,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         if UserDefaults.standard.bool(forKey: Prefs.Key.recCountdown) {
             phase = .countdown
             let ok = await Countdown.run(seconds: 3)
-            guard ok else { phase = .idle; keystrokes.stop(); camera.hideIfWeShowedIt(cameraWasVisible); return }
+            guard ok else { phase = .idle; keystrokes.stop(); cover.hide(); camera.hideIfWeShowedIt(cameraWasVisible); return }
         }
         let d = UserDefaults.standard
         let options = ScreenRecorder.Options(
@@ -128,6 +162,7 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         }
         self.recorder = recorder
         startedAt = Date()
+        pausedTotal = 0; pausedAt = nil; isPaused = false
         trackedScreen = screen
         if let screen { clicks.start(screen: screen); keystrokes.start() }
         phase = .recording
@@ -145,9 +180,12 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         let clickLog = trackedScreen != nil ? clicks.stop() : nil
         keystrokes.stop()
         trackedScreen = nil
+        cover.hide()
+        camera.exitFullScreen()
         do { url = try await recorder.stop() } catch { fail(error); return }
         self.recorder = nil
         startedAt = nil
+        isPaused = false; pausedAt = nil
         camera.hideIfWeShowedIt(cameraWasVisible)
         guard let url else { phase = .idle; return }
 
@@ -186,6 +224,9 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
         ControlBar.shared.hide()
         clicks.stop(); trackedScreen = nil
         keystrokes.stop()
+        cover.hide()
+        camera.exitFullScreen()
+        isPaused = false; pausedAt = nil
         Task {
             let url = try? await recorder.stop()
             if let url { try? FileManager.default.trashItem(at: url, resultingItemURL: nil) }
@@ -213,6 +254,9 @@ final class RecordingController: NSObject, ObservableObject, SCContentSharingPic
 
     private func fail(_ error: Error) {
         ControlBar.shared.hide()
+        cover.hide()
+        camera.exitFullScreen()
+        isPaused = false; pausedAt = nil
         clicks.stop(); trackedScreen = nil
         keystrokes.stop()
         recorder = nil

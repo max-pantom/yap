@@ -327,6 +327,7 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.zoomLevel) var zoomLevel = 1.8
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
+    @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
 
     var body: some View {
         Form {
@@ -360,6 +361,10 @@ private struct RecordingTab: View {
                 Toggle(isOn: $showKeystrokes) {
                     Text("Show keyboard shortcuts")
                     Text("Shortcuts like ⌘K appear on screen. Ordinary typing never does.")
+                }
+                Toggle(isOn: $hideDistractions) {
+                    Text("Hide desktop icons and notifications")
+                    Text("Your wallpaper covers the icons while you record, and banners never appear in the video.")
                 }
             }
 

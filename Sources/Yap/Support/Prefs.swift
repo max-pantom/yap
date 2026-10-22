@@ -18,6 +18,7 @@ enum Prefs {
         static let recCountdown = "rec.countdown"
         static let recAutoCopy = "rec.autoCopy"
         static let recFolder = "rec.folder"
+        static let recHideDistractions = "rec.hideDistractions"   // cover desktop icons, leave banners out
         static let historyFolder = "dictation.historyFolder"   // "" = Application Support/Yap
         static let bubbleSize = "rec.bubbleSize"
         static let onboarded = "general.onboarded"
@@ -64,6 +65,7 @@ enum Prefs {
             Key.recCountdown: true,
             Key.recAutoCopy: true,
             Key.recFolder: "",
+            Key.recHideDistractions: true,
             Key.historyFolder: "",
             Key.bubbleSize: 220.0,
             Key.onboarded: false,

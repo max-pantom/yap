@@ -71,7 +71,7 @@ final class ControlBar {
     private var panel: OverlayPanel?
 
     func show(for recorder: RecordingController) {
-        let p = OverlayPanel(size: NSSize(width: 300, height: 52), interactive: true)
+        let p = OverlayPanel(size: NSSize(width: 380, height: 52), interactive: true)
         p.contentView = NSHostingView(rootView: ControlBarView(recorder: recorder))
         p.isMovableByWindowBackground = true
         p.placeBottomCenter(offset: 24)
@@ -84,6 +84,9 @@ final class ControlBar {
 
 struct ControlBarView: View {
     @ObservedObject var recorder: RecordingController
+    @ObservedObject var camera: CameraBubble
+
+    init(recorder: RecordingController) { self.recorder = recorder; self.camera = recorder.camera }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -92,14 +95,26 @@ struct ControlBarView: View {
                     .frame(width: 30, height: 30).background(.red, in: Circle())
             }
             .help("Stop & save (\(Shortcut.label(.record)))")
+            Button { recorder.togglePause() } label: {
+                Image(systemName: recorder.isPaused ? "record.circle" : "pause.fill").font(.system(size: 14, weight: .bold))
+                    .frame(width: 30, height: 30).background(.white.opacity(0.16), in: Circle())
+            }
+            .help(recorder.isPaused ? "Resume recording" : "Pause recording")
             TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
-                Text(elapsed(at: ctx.date)).font(.system(size: 14, weight: .semibold).monospacedDigit())
+                let s = Int(recorder.elapsed(at: ctx.date))
+                Text(recorder.isPaused ? "Paused · \(s / 60):\(String(format: "%02d", s % 60))" : String(format: "%d:%02d", s / 60, s % 60))
+                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                    .opacity(recorder.isPaused ? (Int(ctx.date.timeIntervalSinceReferenceDate * 2) % 2 == 0 ? 1 : 0.55) : 1)
             }
             Spacer(minLength: 0)
             Button { recorder.camera.toggle() } label: {
                 Image(systemName: "person.crop.circle").font(.system(size: 15))
             }
-            .help("Toggle camera bubble")
+            .help("Show or hide the camera bubble")
+            Button { recorder.camera.toggleFullScreen() } label: {
+                Image(systemName: camera.isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 14))
+            }
+            .help(camera.isFullScreen ? "Back to the bubble" : "Camera full screen (for an intro)")
             Button { recorder.cancel() } label: {
                 Image(systemName: "trash").font(.system(size: 14))
             }
@@ -108,13 +123,8 @@ struct ControlBarView: View {
         .buttonStyle(.plain)
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
-        .frame(width: 300, height: 52)
+        .frame(width: 380, height: 52)
         .background(.black.opacity(0.85), in: Capsule())
-    }
-
-    private func elapsed(at now: Date) -> String {
-        let s = Int(now.timeIntervalSince(recorder.startedAt ?? now))
-        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 

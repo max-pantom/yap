@@ -4,7 +4,7 @@ import AppKit
 /// Floating, draggable, circular camera preview. Because it's a real on-screen window it shows up
 /// in display recordings (we explicitly keep it in the capture filter) at zero extra compositing cost.
 @MainActor
-final class CameraBubble {
+final class CameraBubble: ObservableObject {
     private var panel: NSPanel?
     private let session = AVCaptureSession()
     private var configured = false
@@ -36,13 +36,51 @@ final class CameraBubble {
     }
 
     func hide() {
+        exitFullScreen()
         panel?.orderOut(nil)
         let session = self.session
         DispatchQueue.global(qos: .utility).async { if session.isRunning { session.stopRunning() } }
     }
 
+    // MARK: Full screen
+
+    @Published private(set) var isFullScreen = false
+    private var bubbleFrame: NSRect?
+
+    /// The camera fills the screen (for intros and outros), then goes back to the bubble where it was.
+    func toggleFullScreen() { isFullScreen ? exitFullScreen() : enterFullScreen() }
+
+    func enterFullScreen() {
+        if !isVisible { show() }
+        guard let panel, !isFullScreen else { return }
+        let screen = panel.screen ?? NSScreen.main
+        guard let frame = screen?.frame else { return }
+        bubbleFrame = panel.frame
+        isFullScreen = true
+        let view = panel.contentView
+        view?.layer?.borderWidth = 0
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.35
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
+            panel.animator().setFrame(frame, display: true)
+        }
+        view?.layer?.cornerRadius = 0
+    }
+
+    func exitFullScreen() {
+        guard let panel, isFullScreen, let back = bubbleFrame else { isFullScreen = false; return }
+        isFullScreen = false
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.3
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
+            panel.animator().setFrame(back, display: true)
+        }
+        panel.contentView?.layer?.cornerRadius = back.width / 2
+        panel.contentView?.layer?.borderWidth = 3
+    }
+
     func cycleSize() {
-        guard let panel else { return }
+        guard let panel, !isFullScreen else { return }
         let sizes: [CGFloat] = [160, 220, 320]
         let current = panel.frame.width
         let next = sizes.first { $0 > current + 1 } ?? sizes[0]

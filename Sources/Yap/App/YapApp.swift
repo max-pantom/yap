@@ -248,6 +248,8 @@ private struct RecordButtons: View {
     var body: some View {
         if recorder.phase == .recording {
             Button("Stop Recording  (\(Shortcut.label(.record)))") { Task { await recorder.stop() } }
+            Button(recorder.isPaused ? "Resume Recording" : "Pause Recording") { recorder.togglePause() }
+            Button(recorder.camera.isFullScreen ? "Camera Back to Bubble" : "Camera Full Screen") { recorder.camera.toggleFullScreen() }
             Button("Discard Recording") { recorder.cancel() }
         } else {
             Button("Record Screen  (\(Shortcut.label(.record)))") { recorder.toggle() }

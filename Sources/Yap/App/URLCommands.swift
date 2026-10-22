@@ -22,11 +22,12 @@ enum URLCommands {
         ("yap://dictate?action=cancel", "Also: start, stop"),
         ("yap://command", "Command Mode on your selection"),
         ("yap://record", "Start or stop recording the screen"),
-        ("yap://record?action=discard", "Also: start, stop"),
+        ("yap://record?action=pause", "Also: start, stop, resume, discard"),
         ("yap://record-window", "Pick a window or app to record"),
         ("yap://meeting", "Start or end meeting notes"),
         ("yap://meeting?action=discard", "Also: start, stop"),
         ("yap://camera", "Show or hide the camera bubble"),
+        ("yap://camera?mode=full", "Camera full screen, or back to the bubble"),
         ("yap://copy-last", "Copy your last dictation"),
         ("yap://library", "Open the Library"),
         ("yap://settings", "Open Settings"),
@@ -65,6 +66,8 @@ enum URLCommands {
             case "start": if !rec.isActive { rec.toggle() }
             case "stop": if rec.phase == .recording { Task { await rec.stop() } }
             case "discard": rec.cancel()
+            case "pause": Task { await rec.pause() }
+            case "resume": Task { await rec.resume() }
             default: rec.toggle()
             }
         case "record-window": rec.recordPicked()
@@ -76,7 +79,10 @@ enum URLCommands {
             case "discard": m.discard()
             default: m.toggle()
             }
-        case "camera": rec.camera.toggle()
+        case "camera":
+            if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "mode" })?.value == "full" {
+                rec.camera.toggleFullScreen()
+            } else { rec.camera.toggle() }
         case "copy-last":
             guard let last = model.history.entries.first else { HUD.shared.toast("No dictations yet", symbol: "text.bubble"); return }
             NSPasteboard.general.clearContents()

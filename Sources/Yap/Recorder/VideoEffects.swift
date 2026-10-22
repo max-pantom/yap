@@ -26,10 +26,16 @@ final class ClickTracker {
     private var start = Date()
     private var screen = CGRect.zero
     private var lastMove = 0.0
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+
+    /// While paused nothing is logged, and the time spent paused is taken out so zooms line up with the video.
+    func pause() { if pausedAt == nil { pausedAt = Date() } }
+    func resume() { if let p = pausedAt { pausedTotal += Date().timeIntervalSince(p); pausedAt = nil } }
 
     func start(screen frame: CGRect) {
         stop()
-        log = ClickLog(); start = Date(); screen = frame; lastMove = 0
+        log = ClickLog(); start = Date(); screen = frame; lastMove = 0; pausedAt = nil; pausedTotal = 0
         let handler: (NSEvent) -> Void = { [weak self] e in
             MainActor.assumeIsolated { self?.record(click: e.type != .mouseMoved && e.type != .leftMouseDragged) }
         }
@@ -47,7 +53,8 @@ final class ClickTracker {
     }
 
     private func record(click: Bool) {
-        let t = Date().timeIntervalSince(start)
+        guard pausedAt == nil else { return }
+        let t = Date().timeIntervalSince(start) - pausedTotal
         if !click, t - lastMove < 0.1 { return } // moves at ~10 per second are plenty
         let p = NSEvent.mouseLocation
         guard screen.width > 0, screen.contains(p) else { return }
