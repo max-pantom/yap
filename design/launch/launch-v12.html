@@ -10,8 +10,8 @@
   :root { color-scheme: dark; }
   body { margin: 0; background: #151517; color: #f2f2f4; font: 13px/1.4 "Geist", system-ui, sans-serif;
          display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; }
-  canvas { width: min(100%, 860px); aspect-ratio: 1 / 1; background: #fff; border-radius: 6px; }
-  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; width: min(100%, 860px); }
+  canvas { width: min(100%, 1280px); aspect-ratio: 16 / 9; background: #fff; border-radius: 6px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; width: min(100%, 1280px); }
   .bar input { flex: 1; min-width: 200px; }
   button { font: inherit; padding: 6px 12px; border-radius: 999px; border: 1px solid #3a3a3e; background: #232326; color: inherit; cursor: pointer; }
   button.solid { background: #fff; color: #000; border-color: #fff; }
@@ -20,7 +20,7 @@
 </style>
 </head>
 <body>
-<canvas id="film" width="1920" height="1920"></canvas>
+<canvas id="film" width="1920" height="1080"></canvas>
 <audio id="sfx" preload="auto"></audio>
 <div class="bar">
   <button id="play">Pause</button>
@@ -37,7 +37,7 @@
 // floating windows, shallow focus and motion blur on the fast moves (Meta). Every frame is a pure function of
 // time, so the preview and the exported MP4 are identical.
 (() => {
-  const W = 1920, H = 1920, FPS = 60, DUR = 15;
+  const W = 1920, H = 1080, FPS = 60, DUR = 15;
   const INK = "#000", MUTED = "rgba(0,0,0,0.5)", SCENE = "#e8e8ed", RED = "#e6383b", PAPER = "#fff";
   const canvas = document.getElementById("film");
   const main = canvas.getContext("2d");
@@ -337,7 +337,9 @@
   // swap above a strip of feature screens, and everything folds back into the mark.
   // =====================================================================================================
   const BLUE = "#000000", GREEN = "#6e6e73", LINE = "rgba(0,0,0,0.045)";   // black and grey only; "green" is the second tone
-  const C = W / 2;                                     // square canvas: centre on both axes
+  // Scenes are laid out on a 1920 × 1920 world; the camera shows its middle in 16:9, scaled by FIT where a
+  // scene needs the whole height.
+  const C = 960, FIT = H / 1920;
 
   // ---------- Canvas furniture ----------
   function grid() {}   // (kept as a hook; the film is plain white)
@@ -493,50 +495,36 @@
     alpha(easeIn(prog(t, 3.4, 3.6)), () => { g.fillStyle = PAPER; g.fillRect(0, 0, W, H); });
   }
 
-  // ---------- Scene C · Introducing… Yap 1.2 (3.5 – 5.6) ----------
-  const PILLS = ["Pause & resume", "Remove ums", "Full-screen camera", "No distractions", "Pause Yap", "Styles per app",
-    "Auto language", "Backup", "Choose your folders", "Meeting prompts", "Mic priority", "Storage", "Share", "Rename"];
-  function pill(text, x, y, color) {
-    const w = measureSys(text, 42, 500) + 110;
-    rr(x, y - 46, w, 92, 46, PAPER, "#e3e5ea", 2);
-    for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(x + 38 + i * 12, y + (i === 1 ? -8 : 5), 5, 0, Math.PI * 2); g.fillStyle = color; g.fill(); }
-    sysTxt(text, x + 86, y + 14, 42, "#3a3a3f");
-    return w;
-  }
+  // ---------- Scene C · Introducing 1.2 (3.5 – 5.6) ----------
+  // "Introducing" types on big while the camera pushes in; it flies up and out, a huge "1.2" crashes in from far
+  // away and settles, and the Yap mark rolls in beside it. Then the three words that sum it up.
   function sceneC(t) {
     const u = t - 3.5;
-    const reveal = easeInOut(prog(u, 1.1, 1.5));           // the cloud of what's new
-    const leave = easeIn(prog(u, 0.85, 1.12));             // "Introducing…" lifts away first
-    camera(t, C, C, mix(1.35, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 1.06, prog(u, 0.9, 2.1)), 0, () => {
-      grid();
-      // The pill in a selection box.
+    const leave = easeIn(prog(u, 0.82, 1.08));
+    const crash = prog(u, 0.95, 1.4), ce = easeOut(crash);
+    camera(t, C, C, FIT * 1.9 * mix(1.08, 1, easeOut(prog(u, 0, 0.9))) * mix(1, 1.04, prog(u, 1.4, 2.1)), 0, () => {
       alpha(1 - leave, () => {
-        g.save(); g.translate(0, -120 * leave);
-        const pw = 1180, ph = 230;
-        g.save(); g.shadowColor = "rgba(0,0,0,0.10)"; g.shadowBlur = 40; g.shadowOffsetY = 10;
-        rr(C - pw / 2, C - ph / 2, pw, ph, 30, PAPER); g.restore();
-        rr(C - pw / 2, C - ph / 2, pw, ph, 30, null, "#e6e8ed", 2);
-        for (let i = 0; i < 4; i++) {           // a little loading dance, blue and green
-          const bob = Math.sin(t * 9 - i * 0.9) * 6;
-          g.beginPath(); g.arc(C - pw / 2 + 100 + (i % 2) * 34, C + (i < 2 ? -18 : 18) + bob, 12, 0, Math.PI * 2); g.fillStyle = i % 2 ? GREEN : BLUE; g.fill();
-        }
-        typeOn("Introducing…", C - pw / 2 + 200, C + 40, prog(u, 0.1, 0.75), { size: 116, weight: 600 });
+        g.save(); g.translate(0, -700 * leave);
+        typeOn("Introducing", C, C + 60, prog(u, 0.05, 0.62), { size: 230, weight: 600, align: "center", track: -0.04 });
         g.restore();
       });
-      // Yap 1.2 in a cloud of what's new, rows drifting opposite ways.
-      alpha(reveal, () => {
-        const rows = [[C - 700, 1], [C - 520, -1], [C + 470, 1], [C + 650, -1]];
-        rows.forEach(([y, dir], r) => {
-          let x = -300 + dir * (t * 70) + r * 140;
-          for (let k = 0; k < 14; k++) {
-            const item = PILLS[(k + r * 4) % PILLS.length];
-            x += pill(item, x, y, (k + r) % 2 ? GREEN : BLUE) + 26;
-          }
+      if (crash > 0) {
+        // 1.2 comes from far in front of the camera and lands with a small bounce.
+        const sc = mix(6, 1, ce) * (1 + 0.035 * Math.exp(-Math.max(0, u - 1.4) * 7) * Math.sin(Math.max(0, u - 1.4) * 20));
+        alpha(clamp(crash * 3), () => {
+          g.save(); g.translate(C + 170, C); g.scale(sc, sc);
+          txt("1.2", 0, 150, { size: 440, weight: 700, align: "center", track: -0.05 });
+          g.restore();
         });
-      });
-      alpha(1, () => {
-        typeOn("Yap 1.2", C, C + 90, prog(u, 1.12, 1.62), { size: 330, weight: 700, align: "center", track: -0.045 });
-      });
+        // The mark rolls in beside it.
+        const st = prog(u, 1.05, 1.7), e0 = easeOut(st);
+        const rings = cfg.keys[0].map(([x, y], i) => {
+          const ang = Math.atan2(y || -1, x || 0.001) + i * 0.4;
+          return [x + (Math.cos(ang) * 330 - x) * (1 - e0), y + (Math.sin(ang) * 330 - y) * (1 - e0)];
+        });
+        alpha(clamp(st * 4), () => drawMark(C - 420, C - 10, 300, st < 1 ? rings : drift(cfg.keys[0], u - 1.7, 5), { rim: easeOut(clamp(st * 1.25)) }));
+        kinetic(t, ["Pause.", "Tidy.", "Focus.", "And", "more."], C, C + 330, 3.5 + 1.45, { size: 64, step: 0.09, color: MUTED, rise: 24 });
+      }
     });
   }
 
@@ -635,7 +623,7 @@
     let pos = 0;
     BEATS.forEach((b, i) => { if (i > 0) pos += easeInOut(prog(t, b[1] - 0.15, b[1] + 0.4)); });
     const out = easeInOut(prog(t, 11.55, 12.05));
-    camera(t, C, C, mix(1.12, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 0.55, out), 0, () => {
+    camera(t, C, C + 40, FIT * 1.06 * mix(1.12, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 0.55, out), 0, () => {
       grid();
       swapWord(t, BEATS.map((b) => b[0]), BEATS.map((b) => b[1]), C, 640, { size: 260, weight: 700, align: "center", track: -0.045 });
       alpha(1 - out, () => kinetic(t, [BEATS[idx][2]], C, 820, BEATS[idx][1] + 0.2, { size: 46, color: MUTED, rise: 18, track: -0.01 }));
@@ -657,7 +645,7 @@
     const u = t - 11.8;
     const fold = easeInOut(prog(u, 0, 0.6));
     const f = prog(t, 12.1, 13.0), fe = easeInOut(f);
-    camera(t, C, C, mix(0.55, 1, easeOut(prog(u, 0, 0.8))) * mix(1, 1.05, prog(u, 0.8, 3.2)), 0, () => {
+    camera(t, C, C + 120, FIT * 1.15 * mix(0.55, 1, easeOut(prog(u, 0, 0.8))) * mix(1, 1.05, prog(u, 0.8, 3.2)), 0, () => {
       grid();
       // The feature cards rush in and shrink into a selection box…
       for (let i = 0; i < 5; i++) {
@@ -695,7 +683,7 @@
     if (t >= 11.8) alpha(easeOut(prog(t, 11.8, 12.0)), () => sceneE(t));
   }
   // Motion blur on the fast moves: several moments inside one frame's shutter, averaged.
-  const BLUR = [[1.3, 1.9], [3.22, 3.62], [5.45, 5.75], [6.62, 6.98], [7.87, 8.23], [9.12, 9.48], [10.37, 10.73], [11.55, 12.25]];
+  const BLUR = [[1.3, 1.9], [3.22, 3.62], [4.3, 4.85], [5.45, 5.75], [6.62, 6.98], [7.87, 8.23], [9.12, 9.48], [10.37, 10.73], [11.55, 12.25]];
   const acc = document.createElement("canvas"); acc.width = W; acc.height = H;
   const accCtx = acc.getContext("2d");
   function draw(t) {

@@ -2,7 +2,7 @@
 
 Every release, newest first. The same list is on [yap.primitive8.cc/changelog](https://yap.primitive8.cc/changelog).
 
-## 1.2 · coming soon
+## 1.2 · 22 October 2026
 
 Pause your recordings, tidy them in one click, and a stack of small things people asked for.
 
