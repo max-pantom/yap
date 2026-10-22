@@ -357,6 +357,11 @@ private struct DictationsPane: View {
         }
         .toolbar {
             if !history.entries.isEmpty {
+                Menu {
+                    Button("As Markdown…") { history.exportFile(csv: false) }
+                    Button("As CSV (for spreadsheets)…") { history.exportFile(csv: true) }
+                } label: { Label("Export", systemImage: "square.and.arrow.up") }
+                .help("Save your dictations as a file")
                 Button("Clear History", role: .destructive) { history.clear() }
             }
         }

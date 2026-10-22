@@ -525,6 +525,51 @@ final class HistoryStore: ObservableObject {
 
     func clear() { entries = []; save() }
 
+    /// Adds entries you don't have yet (by id), newest first. Returns the new total.
+    @discardableResult
+    func merge(_ more: [DictationEntry]) -> Int {
+        let known = Set(entries.map(\.id))
+        entries = (entries + more.filter { !known.contains($0.id) }).sorted { $0.date > $1.date }
+        if entries.count > 2000 { entries.removeLast(entries.count - 2000) }
+        save()
+        return entries.count
+    }
+
+    // MARK: Export
+
+    func markdown() -> String {
+        var out = "# Yap dictations\n"
+        var day = ""
+        for e in entries {
+            let d = e.date.formatted(date: .complete, time: .omitted)
+            if d != day { day = d; out += "\n## \(d)\n\n" }
+            out += "- **\(e.date.formatted(date: .omitted, time: .shortened))**\(e.app.map { " · \($0)" } ?? "")\(e.isCommand ? " · Command Mode" : ""): \(e.text.replacingOccurrences(of: "\n", with: " "))\n"
+        }
+        return out
+    }
+
+    func csv() -> String {
+        func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+        let iso = ISO8601DateFormatter()
+        return "date,app,text,what you said,seconds,command\n" + entries.map {
+            [iso.string(from: $0.date), q($0.app ?? ""), q($0.text), q($0.raw), String(format: "%.1f", $0.duration), $0.isCommand ? "yes" : "no"].joined(separator: ",")
+        }.joined(separator: "\n") + "\n"
+    }
+
+    /// Asks where, then saves the history as Markdown or CSV.
+    func exportFile(csv asCSV: Bool) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Yap dictations.\(asCSV ? "csv" : "md")"
+        NSApp.activate()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try (asCSV ? csv() : markdown()).write(to: url, atomically: true, encoding: .utf8)
+            HUD.shared.toast("Exported \(entries.count) dictations", symbol: "checkmark.circle.fill")
+        } catch {
+            HUD.shared.toast("Couldn't export: \(error.localizedDescription)", symbol: "exclamationmark.triangle.fill")
+        }
+    }
+
     var totalWords: Int { entries.reduce(0) { $0 + $1.words } }
 
     /// Typing at ~40 wpm vs. the time actually spent speaking.

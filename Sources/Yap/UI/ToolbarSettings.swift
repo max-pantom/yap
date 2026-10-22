@@ -211,6 +211,12 @@ private struct GeneralColumns: View {
                     Button("Check Now") { Updater.shared.checkForUpdates() }.padding(.top, 2)
                 }
             }
+            LabeledContent("Backup:") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack { Button("Export…") { Backup.export() }; Button("Import…") { Backup.importFile() } }
+                    Text("Settings, shortcuts, dictionary, snippets and history in one file, for a new Mac.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Row("Automation") {
                 Toggle("Let other apps control Yap", isOn: $urlCommands)
                 Hint("Shortcuts, Raycast, Stream Deck or scripts can open yap:// links.")

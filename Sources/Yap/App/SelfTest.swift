@@ -32,6 +32,18 @@ enum SelfTest {
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
         }
+        if args.contains("--backup-test") {
+            Prefs.registerDefaults()
+            MainActor.assumeIsolated {
+                let data = try! Backup.data()
+                let file = try! PropertyListSerialization.propertyList(from: data, format: nil) as! [String: Any]
+                let settings = file["settings"] as? [String: Any] ?? [:]
+                let leaked = [Prefs.Key.recFolder, Prefs.Key.historyFolder, Prefs.Key.micID, Prefs.Key.cameraID].filter { settings[$0] != nil }
+                let hist = (try? JSONDecoder().decode([DictationEntry].self, from: file["history"] as? Data ?? Data()))?.count ?? -1
+                print("backup: \(data.count) bytes, \(settings.count) settings, \(hist) dictations, machine keys leaked: \(leaked)", leaked.isEmpty && hist >= 0 ? "ok" : "FAILED")
+                exit(leaked.isEmpty && hist >= 0 ? 0 : 1)
+            }
+        }
         if args.contains("--history-move-test") {
             // Moving the dictation history: merged by id, newest first, the old file sent to the Trash.
             let fm = FileManager.default, root = fm.temporaryDirectory.appendingPathComponent("yap-hist-\(UUID().uuidString)")

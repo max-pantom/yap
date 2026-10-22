@@ -547,6 +547,15 @@ private struct GeneralTab: View {
                 }
             }
 
+            Section {
+                LabeledContent {
+                    HStack { Button("Export…") { Backup.export() }; Button("Import…") { Backup.importFile() } }
+                } label: {
+                    Text("Back up or move to a new Mac")
+                    Text("Settings, shortcuts, dictionary, snippets and dictation history in one file. Recordings stay in their folder.")
+                }
+            } header: { Text("Backup") }
+
             Section("Automation") {
                 Toggle(isOn: $urlCommands) {
                     Text("Let other apps control Yap")
