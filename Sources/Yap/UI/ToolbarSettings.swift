@@ -363,6 +363,7 @@ private struct RecordingColumns: View {
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
     @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
     @AppStorage(Prefs.Key.recAutoTrashDays) var autoTrashDays = 0
+    @AppStorage(Prefs.Key.meetingSuggest) var meetingSuggest = true
 
     var body: some View {
         Section {
@@ -402,6 +403,7 @@ private struct RecordingColumns: View {
         Section {
             Row("Meetings") {
                 Toggle("Copy the notes when a meeting ends", isOn: $meetingCopyNotes)
+                Toggle("Offer notes when a call starts", isOn: $meetingSuggest)
                 Hint("Press \(Shortcut.label(.meeting)) when a call starts. Yap writes who said what, a summary and action items. Headphones give the cleanest notes.")
             }
         }

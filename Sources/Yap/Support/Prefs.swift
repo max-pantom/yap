@@ -47,7 +47,9 @@ enum Prefs {
         static let showExperimental = "labs.visible"       // the Experimental list in General
         static let labsIPhoneMic = "labs.iphoneMic"
         static let labsNewSettings = "labs.newSettings"     // toolbar-style Settings window; off = the sidebar design
-        static let meetingCopyNotes = "meeting.copyNotes"   // copy the notes as Markdown when a meeting ends
+        static let meetingCopyNotes = "meeting.copyNotes"
+        static let meetingSuggest = "meeting.suggest"            // offer notes when a call app starts using the mic
+        static let meetingSuggestMuted = "meeting.suggestMuted"  // apps you said never to ask about   // copy the notes as Markdown when a meeting ends
         static let urlCommands = "general.urlCommands"      // allow yap:// links (Shortcuts, Raycast…)
         static let autoZoom = "rec.autoZoom"
         static let zoomLevel = "rec.zoomLevel"
@@ -94,6 +96,7 @@ enum Prefs {
             Key.labsIPhoneMic: false,
             Key.labsNewSettings: true,
             Key.meetingCopyNotes: true,
+            Key.meetingSuggest: true,
             Key.urlCommands: true,
             Key.autoZoom: true,
             Key.zoomLevel: 1.8,

@@ -32,6 +32,11 @@ enum SelfTest {
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
         }
+        if args.contains("--mic-users") {
+            let apps = CallDetector.appsUsingMic()
+            print("apps using a microphone:", apps.isEmpty ? "none" : apps.map { "\($0)\(CallDetector.callApps[$0].map { " (\($0))" } ?? "")" }.joined(separator: ", "))
+            exit(0)
+        }
         if args.contains("--backup-test") {
             Prefs.registerDefaults()
             MainActor.assumeIsolated {

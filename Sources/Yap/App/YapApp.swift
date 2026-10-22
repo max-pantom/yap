@@ -51,6 +51,7 @@ final class AppModel: ObservableObject {
     func boot() {
         Prefs.registerDefaults()
         Updater.shared.start()
+        CallDetector.shared.start()
         dictation.boot()
         library.reload()
 

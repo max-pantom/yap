@@ -342,6 +342,7 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
     @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
     @AppStorage(Prefs.Key.recAutoTrashDays) var autoTrashDays = 0
+    @AppStorage(Prefs.Key.meetingSuggest) var meetingSuggest = true
 
     var body: some View {
         Form {
@@ -407,6 +408,10 @@ private struct RecordingTab: View {
                 Toggle(isOn: $meetingCopyNotes) {
                     Text("Copy the notes when a meeting ends")
                     Text("Ready to paste into Notion, Linear, Slack or an email, as Markdown.")
+                }
+                Toggle(isOn: $meetingSuggest) {
+                    Text("Offer notes when a call starts")
+                    Text("When Zoom, Teams, FaceTime or Meet in a browser starts using your mic, Yap asks. It never starts on its own.")
                 }
             } header: {
                 Text("Meetings")
