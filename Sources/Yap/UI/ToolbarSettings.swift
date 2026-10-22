@@ -287,6 +287,12 @@ private struct DictationColumns: View {
                     }
                 }
             }
+            LabeledContent("In these apps:") {
+                VStack(alignment: .leading, spacing: 4) {
+                    AppStylesEditor(history: model.history)
+                    Text("Their own clean-up style, like Verbatim in Terminal or Formal in Mail.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Row("When typing") {
                 Toggle("Fit in with the text around the cursor", isOn: $fitToCursor)
                 Toggle("Also copy it to the clipboard", isOn: $keepOnClipboard)

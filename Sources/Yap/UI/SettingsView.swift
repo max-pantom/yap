@@ -174,6 +174,12 @@ private struct DictationTab: View {
                         .font(.caption).foregroundStyle(.orange)
                     GoTo(page: .models)
                 }
+                LabeledContent {
+                    AppStylesEditor(history: model.history)
+                } label: {
+                    Text("Styles for particular apps")
+                    Text("Like Verbatim in Terminal or Formal in Mail. Other apps use the clean-up above.")
+                }
                 Toggle(isOn: $fitToCursor) {
                     Text("Fit in with the text around the cursor")
                     Text("Mid-sentence, Yap adds the space and keeps it lowercase. Names keep their capitals.")

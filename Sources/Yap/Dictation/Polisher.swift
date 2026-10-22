@@ -14,11 +14,11 @@ actor Polisher {
     private var warm: (instructions: String, session: LanguageModelSession)?
 
     func prewarmCleanup(app: String?) {
-        guard modelAvailable, Prefs.style != .verbatim else { return }
+        guard modelAvailable, Prefs.style(for: app) != .verbatim else { return }
         if LLM.provider(for: .cleanup) != .apple { LLM.prewarm() }
         guard LLM.appleAvailable else { return }
         // Warm Apple too: it's the primary cleanup model, or the instant backup for the second one.
-        let instructions = Self.cleanupInstructions(style: Prefs.style, app: app, vocabulary: Prefs.dictionary.vocabulary)
+        let instructions = Self.cleanupInstructions(style: Prefs.style(for: app), app: app, vocabulary: Prefs.dictionary.vocabulary)
         if warm?.instructions == instructions { return }
         let session = LanguageModelSession(instructions: instructions)
         session.prewarm()
@@ -34,7 +34,7 @@ actor Polisher {
             return Prefs.expandVariables(expansion, clipboard: clip)
         }
 
-        let style = Prefs.style
+        let style = Prefs.style(for: app)
         let dict = Prefs.dictionary
         let basic = Rules.basic(raw, app: app)
         let wordCount = raw.split(whereSeparator: \.isWhitespace).count

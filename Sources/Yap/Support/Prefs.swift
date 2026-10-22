@@ -19,7 +19,8 @@ enum Prefs {
         static let recAutoCopy = "rec.autoCopy"
         static let recFolder = "rec.folder"
         static let recHideDistractions = "rec.hideDistractions"   // cover desktop icons, leave banners out
-        static let historyFolder = "dictation.historyFolder"   // "" = Application Support/Yap
+        static let historyFolder = "dictation.historyFolder"
+        static let appStyles = "dictation.appStyles"     // [app name: CleanupStyle raw value]   // "" = Application Support/Yap
         static let bubbleSize = "rec.bubbleSize"
         static let onboarded = "general.onboarded"
         static let showFlowBar = "general.showFlowBar"
@@ -101,6 +102,15 @@ enum Prefs {
     /// The one experiment that starts on: the new Settings design. Off brings back the sidebar.
     static var newSettingsOn: Bool { d.bool(forKey: Key.labsNewSettings) }
     static var style: CleanupStyle { CleanupStyle(rawValue: d.string(forKey: Key.cleanupStyle) ?? "") ?? .polished }
+    /// Clean-up styles set for particular apps (Verbatim in Terminal, Formal in Mail…).
+    static var appStyles: [String: String] {
+        get { d.dictionary(forKey: Key.appStyles) as? [String: String] ?? [:] }
+        set { d.set(newValue, forKey: Key.appStyles) }
+    }
+    /// The style for dictating into `app`: its own if you set one, otherwise the main one.
+    static func style(for app: String?) -> CleanupStyle {
+        app.flatMap { appStyles[$0] }.flatMap(CleanupStyle.init(rawValue:)) ?? style
+    }
     static var sounds: Bool { d.bool(forKey: Key.sounds) }
 
     static var recordingsFolder: URL {
