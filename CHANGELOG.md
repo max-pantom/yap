@@ -19,13 +19,14 @@ Pause your recordings, tidy them in one click, and a stack of small things peopl
 - **Pause Yap.** Switch off the dictation key for 15 minutes, an hour or until you resume, for gaming or presenting.
 - **Styles per app.** A clean-up style for particular apps: Verbatim in Terminal, Formal in Mail, Casual in Slack.
 - **Detect the language automatically**, with a Whisper model, for people who switch languages.
+- **Choose your folders.** Save recordings (with their captions, .json notes and meeting notes) to any folder in
+  Settings → Recording → Saved in → Change…, and your dictation history (history.json) in Settings → Dictation →
+  History → Change…. Yap offers to move what you already have, and merges the history if the folder has one.
 - **Backup.** Export everything (settings, shortcuts, dictionary, snippets, history) to one file and import it on a
   new Mac. Export your dictations as Markdown or CSV too.
 
 ### Better
 - **Preferred microphones.** A priority list, so your best connected mic is always the one used.
-- **Choose where recordings go,** and **where your dictation history goes,** in Settings, with an offer to move
-  what you already have.
 - **Storage at a glance.** The Library shows how much space recordings use, and can move ones older than 30, 60 or
   90 days to the Trash for you.
 - **Rename and share.** Double-click a recording to rename it; Share (AirDrop, Mail, Messages) for recordings and
