@@ -336,7 +336,7 @@
   // success): the frame becomes the app, the camera glides to Pause, "Introducing…" types out, big words
   // swap above a strip of feature screens, and everything folds back into the mark.
   // =====================================================================================================
-  const BLUE = "#2f6bff", GREEN = "#16c172", LINE = "rgba(0,0,0,0.045)";
+  const BLUE = "#000000", GREEN = "#6e6e73", LINE = "rgba(0,0,0,0.045)";   // black and grey only; "green" is the second tone
   const C = W / 2;                                     // square canvas: centre on both axes
 
   // ---------- Canvas furniture ----------
@@ -505,11 +505,13 @@
   }
   function sceneC(t) {
     const u = t - 3.5;
-    const reveal = easeInOut(prog(u, 0.95, 1.4));          // "Introducing…" gives way to the big word
+    const reveal = easeInOut(prog(u, 1.1, 1.5));           // the cloud of what's new
+    const leave = easeIn(prog(u, 0.85, 1.12));             // "Introducing…" lifts away first
     camera(t, C, C, mix(1.35, 1, easeOut(prog(u, 0, 0.6))) * mix(1, 1.06, prog(u, 0.9, 2.1)), 0, () => {
       grid();
       // The pill in a selection box.
-      alpha(1 - reveal, () => {
+      alpha(1 - leave, () => {
+        g.save(); g.translate(0, -120 * leave);
         const pw = 1180, ph = 230;
         g.save(); g.shadowColor = "rgba(0,0,0,0.10)"; g.shadowBlur = 40; g.shadowOffsetY = 10;
         rr(C - pw / 2, C - ph / 2, pw, ph, 30, PAPER); g.restore();
@@ -519,6 +521,7 @@
           g.beginPath(); g.arc(C - pw / 2 + 100 + (i % 2) * 34, C + (i < 2 ? -18 : 18) + bob, 12, 0, Math.PI * 2); g.fillStyle = i % 2 ? GREEN : BLUE; g.fill();
         }
         typeOn("Introducing…", C - pw / 2 + 200, C + 40, prog(u, 0.1, 0.75), { size: 116, weight: 600 });
+        g.restore();
       });
       // Yap 1.2 in a cloud of what's new, rows drifting opposite ways.
       alpha(reveal, () => {
@@ -530,7 +533,9 @@
             x += pill(item, x, y, (k + r) % 2 ? GREEN : BLUE) + 26;
           }
         });
-        typeOn("Yap 1.2", C, C + 90, prog(u, 1.0, 1.55), { size: 330, weight: 700, align: "center", track: -0.045 });
+      });
+      alpha(1, () => {
+        typeOn("Yap 1.2", C, C + 90, prog(u, 1.12, 1.62), { size: 330, weight: 700, align: "center", track: -0.045 });
       });
     });
   }
@@ -560,8 +565,8 @@
           const ww = measureSys(w + " ", 58, 600);
           alpha(filler ? 1 - gone : 1, () => {
             g.save(); g.translate(x, 300 + (filler ? gone * 60 : 0));
-            if (filler) { rr(-12, -58, ww, 78, 14, "rgba(47,107,255,0.12)"); }
-            sysTxt(w, 0, 0, 58, filler ? BLUE : INK, "left", 600); g.restore();
+            if (filler) { rr(-12, -58, ww, 78, 14, "rgba(0,0,0,0.07)"); }
+            sysTxt(w, 0, 0, 58, filler ? "#6e6e73" : INK, "left", 600); g.restore();
           });
           x += filler ? ww * (1 - gone) : ww;
         });
@@ -572,15 +577,15 @@
           const hgt = quiet ? 6 * (1 - gone) : 20 + 90 * Math.abs(Math.sin(k * 1.7) * Math.sin(k * 0.6 + 1));
           if (quiet && gone > 0.98) continue;
           const xx = 110 + k * 22 * mix(1, 0.86, quiet ? 0 : gone);
-          rr(xx, 520 - hgt / 2, 12, Math.max(4, hgt), 6, quiet ? "#cfd3db" : GREEN);
+          rr(xx, 520 - hgt / 2, 12, Math.max(4, hgt), 6, quiet ? "#d1d1d6" : INK);
         }
       } else if (i === 2) {                              // desktop icons covered by the wallpaper; a banner bounces off
-        const wall = g.createLinearGradient(0, 0, CARD.w, CARD.h); wall.addColorStop(0, "#dfe9ff"); wall.addColorStop(1, "#dff7ea");
+        const wall = g.createLinearGradient(0, 0, CARD.w, CARD.h); wall.addColorStop(0, "#e9e9ed"); wall.addColorStop(1, "#f6f6f8");
         g.save(); g.beginPath(); g.roundRect(0, 0, CARD.w, CARD.h, 36); g.clip();
         g.fillStyle = wall; g.fillRect(0, 0, CARD.w, CARD.h);
         const cover = easeInOut(prog(lt, 0.25, 0.7));
         for (let k = 0; k < 8; k++) {
-          alpha(1 - cover, () => { rr(CARD.w - 170 - (k % 2) * 130, 90 + Math.floor(k / 2) * 150, 90, 90, 18, k % 3 ? "#ffffff" : "#c9d6ff");
+          alpha(1 - cover, () => { rr(CARD.w - 170 - (k % 2) * 130, 90 + Math.floor(k / 2) * 150, 90, 90, 18, k % 3 ? "#ffffff" : "#cfcfd5");
             sysTxt(["Notes.pdf", "todo.txt", "IMG_2042", "Q3 deck", "invoice", "draft", "logo.png", "keys.txt"][k], CARD.w - 215 - (k % 2) * 130, 205 + Math.floor(k / 2) * 150, 20, "#4a4a50"); });
         }
         const bounce = prog(lt, 0.55, 1.15);
@@ -593,7 +598,7 @@
         recordBar(CARD.w / 2, 640, 1.6, t, { secs: 31 });
       } else if (i === 3) {                              // the call prompt, top right, as in the app
         rr(80, 80, 640, 420, 22, "#f4f4f6");
-        for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(150 + (k % 2) * 260, 190 + Math.floor(k / 2) * 190, 64, 0, Math.PI * 2); g.fillStyle = ["#cfe0ff", "#d7f5e5", "#e8e8ee", "#cfe0ff"][k]; g.fill(); }
+        for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(150 + (k % 2) * 260, 190 + Math.floor(k / 2) * 190, 64, 0, Math.PI * 2); g.fillStyle = ["#dcdce1", "#ececf0", "#e3e3e8", "#d4d4da"][k]; g.fill(); }
         const pop = backOut(prog(lt, 0.15, 0.55));
         if (pop > 0) {
           g.save(); g.translate(CARD.w - 120, 150); g.scale(pop, pop); g.translate(-(CARD.w - 120), -150);
@@ -602,8 +607,8 @@
           sysTxt("Zoom is using your mic.", px + 32, py + 62, 30, "#fff", "left", 600);
           sysTxt("Take meeting notes?", px + 32, py + 102, 30, "#fff", "left", 600);
           const take = lt > 0.85;
-          rr(px + 32, py + 124, 190, 46, 12, take ? GREEN : BLUE);
-          sysTxt(take ? "Taking notes" : "Take Notes", px + 54, py + 156, 24, "#fff", "left", 600);
+          rr(px + 32, py + 124, 190, 46, 12, "#ffffff");
+          sysTxt(take ? "Taking notes" : "Take Notes", px + 54, py + 156, 24, INK, "left", 600);
           rr(px + 238, py + 124, 150, 46, 12, "rgba(255,255,255,0.16)");
           sysTxt("Not Now", px + 262, py + 156, 24, "#fff", "left", 500);
           g.restore();
