@@ -64,8 +64,40 @@ final class DictationController: ObservableObject {
         }
     }
 
+    // MARK: Pause Yap
+
+    /// While paused the dictation key does nothing (for gaming, presenting, a screen share). Clicking the Flow bar
+    /// and yap:// links still work.
+    @Published private(set) var pausedUntil: Date?
+    private var resumeTask: Task<Void, Never>?
+    var isPaused: Bool { pausedUntil != nil }
+
+    /// `minutes == nil` pauses until you resume.
+    func pauseYap(minutes: Int?) {
+        if phase == .listening || phase == .locked { cancel() }
+        resumeTask?.cancel()
+        pausedUntil = minutes.map { Date().addingTimeInterval(Double($0) * 60) } ?? .distantFuture
+        if let minutes {
+            resumeTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(Double(minutes) * 60))
+                guard !Task.isCancelled else { return }
+                self?.resumeYap(announce: true)
+            }
+        }
+        let when = minutes.map { $0 >= 60 ? "for \($0 / 60) hour\($0 >= 120 ? "s" : "")" : "for \($0) minutes" } ?? "until you resume it"
+        HUD.shared.toast("Yap is paused \(when). Your key does nothing until then", symbol: "pause.circle.fill")
+    }
+
+    func resumeYap(announce: Bool = true) {
+        resumeTask?.cancel(); resumeTask = nil
+        guard pausedUntil != nil else { return }
+        pausedUntil = nil
+        if announce { HUD.shared.toast("Yap is listening for \(Shortcut.label(.dictate)) again", symbol: "mic.fill") }
+    }
+
     private func handle(_ event: HotkeyMonitor.Event) {
         Log.write("hotkey: \(event) phase=\(phase)")
+        if isPaused, case .begin = event { hotkeys.reset(); return }
         switch event {
         case .begin(let command):
             // Pressing the key while a click-started hands-free session runs finishes it.

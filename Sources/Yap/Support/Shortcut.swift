@@ -129,7 +129,7 @@ struct Shortcut: Codable, Equatable {
     // MARK: Storage
 
     enum Action: String, CaseIterable, Identifiable {
-        case dictate, command, record, meeting, camera, pasteLast
+        case dictate, command, record, meeting, camera, pasteLast, pauseYap
         var id: String { rawValue }
 
         var title: String {
@@ -140,6 +140,7 @@ struct Shortcut: Codable, Equatable {
             case .meeting: "Start / end meeting notes"
             case .camera: "Show / hide camera bubble"
             case .pasteLast: "Paste your last dictation again"
+            case .pauseYap: "Pause Yap for an hour, or resume it"
             }
         }
 
@@ -153,6 +154,7 @@ struct Shortcut: Codable, Equatable {
             case .record: Shortcut(keyCode: UInt16(kVK_ANSI_R), modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue, isModifierOnly: false)
             case .meeting: Shortcut(keyCode: UInt16(kVK_ANSI_M), modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue, isModifierOnly: false)
             case .camera: Shortcut(keyCode: UInt16(kVK_ANSI_C), modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue, isModifierOnly: false)
+            case .pauseYap: nil   // set one in Settings → Shortcuts if you want it
             case .pasteLast: Shortcut(keyCode: UInt16(kVK_ANSI_V), modifiers: NSEvent.ModifierFlags([.control, .option]).rawValue, isModifierOnly: false)
             }
         }

@@ -100,6 +100,12 @@ final class AppModel: ObservableObject {
         if let s = Shortcut.get(.camera) {
             hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.recorder.camera.toggle() }
         }
+        if let s = Shortcut.get(.pauseYap) {
+            hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in
+                guard let d = self?.dictation else { return }
+                d.isPaused ? d.resumeYap() : d.pauseYap(minutes: 60)
+            }
+        }
         if let s = Shortcut.get(.pasteLast) {
             hotKeys.register(key: Int(s.keyCode), modifiers: s.carbonModifiers) { [weak self] in self?.dictation.pasteLast() }
         }
@@ -219,6 +225,7 @@ struct MenuContent: View {
             CameraPicker { model.recorder.camera.useSelectedDevice() }
         }
         Section("Meetings") { MeetingButtons(meeting: model.meeting) }
+        PauseYapMenu(dictation: model.dictation)
         Divider()
         Button("Library…") { model.showLibrary() }.keyboardShortcut("l")
         Button("Settings…") { model.showSettings() }.keyboardShortcut(",")
@@ -254,6 +261,22 @@ private struct RecordButtons: View {
         } else {
             Button("Record Screen  (\(Shortcut.label(.record)))") { recorder.toggle() }
             Button("Record a Window or App…") { recorder.recordPicked() }
+        }
+    }
+}
+
+private struct PauseYapMenu: View {
+    @ObservedObject var dictation: DictationController
+    var body: some View {
+        if let until = dictation.pausedUntil {
+            Button(until == .distantFuture ? "Resume Yap" : "Resume Yap (paused until \(until.formatted(date: .omitted, time: .shortened)))") { dictation.resumeYap() }
+        } else {
+            Menu("Pause Yap") {
+                Button("For 15 Minutes") { dictation.pauseYap(minutes: 15) }
+                Button("For 1 Hour") { dictation.pauseYap(minutes: 60) }
+                Button("Until I Resume") { dictation.pauseYap(minutes: nil) }
+                Text("Your dictation key does nothing while paused")
+            }
         }
     }
 }

@@ -29,6 +29,8 @@ enum URLCommands {
         ("yap://camera", "Show or hide the camera bubble"),
         ("yap://camera?mode=full", "Camera full screen, or back to the bubble"),
         ("yap://copy-last", "Copy your last dictation"),
+        ("yap://pause?minutes=60", "Pause Yap (the dictation key) for a while"),
+        ("yap://resume", "Resume Yap"),
         ("yap://library", "Open the Library"),
         ("yap://settings", "Open Settings"),
     ]
@@ -70,6 +72,10 @@ enum URLCommands {
             case "resume": Task { await rec.resume() }
             default: rec.toggle()
             }
+        case "pause":
+            let m = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "minutes" }?.value.flatMap(Int.init)
+            d.pauseYap(minutes: m ?? 60)
+        case "resume": d.resumeYap()
         case "record-window": rec.recordPicked()
         case "meeting":
             let m = model.meeting
