@@ -18,7 +18,9 @@ enum Prefs {
         static let recCountdown = "rec.countdown"
         static let recAutoCopy = "rec.autoCopy"
         static let recFolder = "rec.folder"
-        static let recHideDistractions = "rec.hideDistractions"   // cover desktop icons, leave banners out
+        static let recHideDistractions = "rec.hideDistractions"
+        static let recAutoTrashDays = "rec.autoTrashDays"   // 0 = keep everything
+        static let recLastCleanup = "rec.lastCleanup"   // cover desktop icons, leave banners out
         static let historyFolder = "dictation.historyFolder"
         static let appStyles = "dictation.appStyles"
         static let micPriority = "device.micPriority"    // ["uid|name", …], best first; used when micID is "priority"     // [app name: CleanupStyle raw value]   // "" = Application Support/Yap
@@ -68,6 +70,7 @@ enum Prefs {
             Key.recAutoCopy: true,
             Key.recFolder: "",
             Key.recHideDistractions: true,
+            Key.recAutoTrashDays: 0,
             Key.historyFolder: "",
             Key.bubbleSize: 220.0,
             Key.onboarded: false,

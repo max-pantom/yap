@@ -362,6 +362,7 @@ private struct RecordingColumns: View {
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
     @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
+    @AppStorage(Prefs.Key.recAutoTrashDays) var autoTrashDays = 0
 
     var body: some View {
         Section {
@@ -419,6 +420,15 @@ private struct RecordingColumns: View {
                     Text("60 fps").tag(60)
                 }
                 .pickerStyle(.radioGroup).horizontalRadioGroupLayout().labelsHidden()
+            }
+            LabeledContent("Clean up:") {
+                Picker("Clean up", selection: $autoTrashDays) {
+                    Text("Keep everything").tag(0)
+                    Text("Move recordings older than 30 days to the Trash").tag(30)
+                    Text("Move recordings older than 60 days to the Trash").tag(60)
+                    Text("Move recordings older than 90 days to the Trash").tag(90)
+                }
+                .labelsHidden().fixedSize()
             }
             LabeledContent("Saved in:") {
                 VStack(alignment: .leading, spacing: 4) {

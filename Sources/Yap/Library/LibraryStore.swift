@@ -13,6 +13,8 @@ struct Recording: Identifiable, Hashable {
 final class LibraryStore: ObservableObject {
     @Published private(set) var recordings: [Recording] = []
     @Published var selection: URL?
+    /// Bytes used by everything in the recordings folder (videos, captions, notes, originals, meetings).
+    @Published private(set) var bytesUsed: Int64 = 0
     private var thumbs: [URL: NSImage] = [:]
 
     func reload(select: URL? = nil) {
@@ -29,6 +31,43 @@ final class LibraryStore: ObservableObject {
             .sorted { $0.created > $1.created }
         if let select { selection = select }
         if let s = selection, !recordings.contains(where: { $0.url == s }) { selection = recordings.first?.url }
+        cleanUpIfDue()
+        Task.detached(priority: .utility) {
+            let n = Self.size(of: folder)
+            await MainActor.run { self.bytesUsed = n }
+        }
+    }
+
+    nonisolated static func size(of folder: URL) -> Int64 {
+        guard let e = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.totalFileAllocatedSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let u as URL in e { total += Int64((try? u.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? 0) }
+        return total
+    }
+
+    /// "Clean up" in Settings → Recording: recordings and meetings older than N days go to the Trash (not deleted),
+    /// checked at most twice a day.
+    private func cleanUpIfDue() {
+        let d = UserDefaults.standard, days = d.integer(forKey: Prefs.Key.recAutoTrashDays)
+        guard days > 0 else { return }
+        let last = d.object(forKey: Prefs.Key.recLastCleanup) as? Date ?? .distantPast
+        guard Date().timeIntervalSince(last) > 12 * 3600 else { return }
+        d.set(Date(), forKey: Prefs.Key.recLastCleanup)
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86400)
+        let old = recordings.filter { $0.created < cutoff }
+        for r in old {
+            try? FileManager.default.trashItem(at: r.url, resultingItemURL: nil)
+            for f in RecordingMeta.companions(for: r.url) { try? FileManager.default.trashItem(at: f, resultingItemURL: nil) }
+        }
+        var meetings = 0
+        for m in AppModel.shared.meeting.store.meetings where m.created < cutoff {
+            try? FileManager.default.trashItem(at: m.folder, resultingItemURL: nil); meetings += 1
+        }
+        guard !old.isEmpty || meetings > 0 else { return }
+        recordings.removeAll { $0.created < cutoff }
+        AppModel.shared.meeting.store.reload()
+        let what = [old.isEmpty ? nil : "\(old.count) recording\(old.count == 1 ? "" : "s")", meetings == 0 ? nil : "\(meetings) meeting\(meetings == 1 ? "" : "s")"].compactMap { $0 }.joined(separator: " and ")
+        HUD.shared.toast("Moved \(what) older than \(days) days to the Trash", symbol: "trash")
     }
 
     func thumbnail(for url: URL) async -> NSImage? {

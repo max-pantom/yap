@@ -76,6 +76,7 @@ private struct RecordingsPane: View {
                         RecordingRow(recording: r, library: library).tag(r.url)
                     }
                 }
+                StorageFooter(library: library)
             }
             .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
 
@@ -370,5 +371,32 @@ private struct DictationsPane: View {
     private func copy(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// "24 recordings · 3.2 GB · cleans up after 60 days"
+private struct StorageFooter: View {
+    @ObservedObject var library: LibraryStore
+    @AppStorage(Prefs.Key.recAutoTrashDays) private var days = 0
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "internaldrive").foregroundStyle(.secondary)
+            Text("\(library.recordings.count) recording\(library.recordings.count == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: library.bytesUsed, countStyle: .file))")
+            if days > 0 { Text("· cleans up after \(days) days").foregroundStyle(.secondary) }
+            Spacer()
+            Menu {
+                Picker("Move to the Trash", selection: $days) {
+                    Text("Keep everything").tag(0)
+                    Text("Older than 30 days").tag(30)
+                    Text("Older than 60 days").tag(60)
+                    Text("Older than 90 days").tag(90)
+                }
+                .pickerStyle(.inline)
+            } label: { Image(systemName: "ellipsis.circle") }
+            .menuStyle(.borderlessButton).fixedSize()
+            .help("Clean up old recordings automatically")
+        }
+        .font(.caption)
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 }

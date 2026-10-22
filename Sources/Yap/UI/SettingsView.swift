@@ -341,6 +341,7 @@ private struct RecordingTab: View {
     @AppStorage(Prefs.Key.showKeystrokes) var showKeystrokes = true
     @AppStorage(Prefs.Key.meetingCopyNotes) var meetingCopyNotes = true
     @AppStorage(Prefs.Key.recHideDistractions) var hideDistractions = true
+    @AppStorage(Prefs.Key.recAutoTrashDays) var autoTrashDays = 0
 
     var body: some View {
         Form {
@@ -421,6 +422,15 @@ private struct RecordingTab: View {
                 Picker("Smoothness", selection: $fps) {
                     Text("30 frames a second").tag(30)
                     Text("60 frames a second").tag(60)
+                }
+                Picker(selection: $autoTrashDays) {
+                    Text("Keep everything").tag(0)
+                    Text("After 30 days").tag(30)
+                    Text("After 60 days").tag(60)
+                    Text("After 90 days").tag(90)
+                } label: {
+                    Text("Move old recordings to the Trash")
+                    Text("Recordings and meetings, checked twice a day. You can still restore them from the Trash.")
                 }
                 LabeledContent {
                     RecordingsFolderControl()
