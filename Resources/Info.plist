@@ -41,6 +41,10 @@
 	<array>
 		<string>_yapmic._tcp</string>
 	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Yap names your meeting notes after the event on your calendar and can remind you to take notes when a call starts. Your calendar stays on your Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Yap names your meeting notes after the event on your calendar and can remind you to take notes when a call starts. Your calendar stays on your Mac.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Yap shows your camera in a floating bubble during screen recordings.</string>
 	<key>NSCameraUseContinuityCameraDeviceType</key>

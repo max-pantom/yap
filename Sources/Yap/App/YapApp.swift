@@ -52,6 +52,7 @@ final class AppModel: ObservableObject {
         Prefs.registerDefaults()
         Updater.shared.start()
         CallDetector.shared.start()
+        MeetingCalendar.shared.start()
         dictation.boot()
         library.reload()
 

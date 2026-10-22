@@ -88,12 +88,12 @@ final class CallPrompt {
     private var hideTask: Task<Void, Never>?
     private var showingEnd = false
 
-    func offerNotes(app: String, name: String) {
-        show(PromptView(symbol: "person.2.wave.2.fill", text: "\(name) is using your mic. Take meeting notes?",
-                        primary: "Take Notes", secondary: "Not Now", tertiary: "Never for \(name)",
+    func offerNotes(app: String, name: String, message: String? = nil) {
+        show(PromptView(symbol: message == nil ? "person.2.wave.2.fill" : "calendar", text: message ?? "\(name) is using your mic. Take meeting notes?",
+                        primary: "Take Notes", secondary: "Not Now", tertiary: message == nil ? "Never for \(name)" : nil,
                         onPrimary: { [weak self] in self?.hide(); AppModel.shared.meeting.start() },
                         onSecondary: { [weak self] in self?.hide() },
-                        onTertiary: { [weak self] in CallDetector.muted.insert(app); self?.hide() }), seconds: 14)
+                        onTertiary: message == nil ? { [weak self] in CallDetector.muted.insert(app); self?.hide() } : nil), seconds: 14)
     }
 
     func offerEnd() {

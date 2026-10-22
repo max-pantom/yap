@@ -132,7 +132,7 @@ actor Polisher {
 
     /// Title, summary and action items for a meeting. Long calls don't fit the on-device model at once, so each
     /// part is boiled down to notes first, then the notes are summarised together.
-    func meetingNotes(for lines: [Meeting.Line]) async -> MeetingNotes? {
+    func meetingNotes(for lines: [Meeting.Line], people: [String] = []) async -> MeetingNotes? {
         guard LLM.isAvailable(for: .summary), !lines.isEmpty else { return nil }
         let budget = 8500
         var parts: [String] = [""]
@@ -141,11 +141,14 @@ actor Polisher {
             if parts[parts.count - 1].count + line.count > budget { parts.append("") }
             parts[parts.count - 1] += line
         }
-        let instructions = """
+        var instructions = """
         You take notes for meetings from their transcript. "You" is the person keeping the notes; "Others" is \
         everyone else on the call. Be specific: names, numbers, dates, decisions. Never invent anything that \
         isn't in the transcript.
         """
+        if !people.isEmpty {
+            instructions += " People invited: \(people.prefix(12).joined(separator: ", ")). Use their names when the transcript makes it clear who someone is."
+        }
         var source = parts[0]
         if parts.count > 1 {
             var notes = ""
@@ -174,6 +177,31 @@ actor Polisher {
         """
         guard let text = await generate(.summary, instructions: instructions, prompt: prompt, timeout: 120, fallbackTimeout: 60) else { return nil }
         return Self.parseMeetingNotes(text)
+    }
+
+    /// Ask your meetings (experimental): answers a question from your meeting notes, naming the meetings it used.
+    func ask(_ question: String, meetings: [Meeting]) async -> String? {
+        guard LLM.isAvailable(for: .summary), !meetings.isEmpty else { return nil }
+        let words = Set(question.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count > 3 })
+        func score(_ s: String) -> Int { let l = s.lowercased(); return words.reduce(0) { $0 + (l.contains($1) ? 1 : 0) } }
+        // Most relevant meetings first; each brings its summary, to-dos and the lines that mention the question.
+        let ranked = meetings.map { m in (m, score(m.title + " " + m.summary + " " + m.actions.map(\.text).joined(separator: " ")) * 3 + m.lines.reduce(0) { $0 + score($1.text) }) }
+            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.created > $1.0.created }
+        var context = ""
+        for (m, _) in ranked.prefix(6) {
+            var block = "MEETING: \(m.title) (\(m.created.formatted(date: .abbreviated, time: .omitted)))\nSummary: \(m.summary)\n"
+            if !m.actions.isEmpty { block += "Action items: " + m.actions.map(\.text).joined(separator: "; ") + "\n" }
+            let hits = m.lines.filter { score($0.text) > 0 }.prefix(12)
+            if !hits.isEmpty { block += hits.map { "\($0.speaker.label): \($0.text)" }.joined(separator: "\n") + "\n" }
+            if context.count + block.count > 8000 { break }
+            context += block + "\n"
+        }
+        let instructions = """
+        You answer questions about the user's meetings using only the notes given. "You" is the user. Be brief and \
+        specific. Say which meeting each fact comes from, in brackets, like [Launch sync]. If the notes don't say, \
+        answer that you couldn't find it in the meetings.
+        """
+        return await generate(.summary, instructions: instructions, prompt: "\(context)\nQuestion: \(question)", timeout: 60, fallbackTimeout: 40)
     }
 
     static func parseMeetingNotes(_ text: String) -> MeetingNotes? {

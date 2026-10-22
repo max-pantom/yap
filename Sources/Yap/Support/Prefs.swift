@@ -46,6 +46,8 @@ enum Prefs {
         static let showKeystrokes = "rec.showKeystrokes"
         static let showExperimental = "labs.visible"       // the Experimental list in General
         static let labsIPhoneMic = "labs.iphoneMic"
+        static let labsCalendar = "labs.calendar"           // name meetings from the calendar, remind when one starts
+        static let labsAskMeetings = "labs.askMeetings"     // ask questions about your meetings
         static let labsNewSettings = "labs.newSettings"     // toolbar-style Settings window; off = the sidebar design
         static let meetingCopyNotes = "meeting.copyNotes"
         static let meetingSuggest = "meeting.suggest"            // offer notes when a call app starts using the mic

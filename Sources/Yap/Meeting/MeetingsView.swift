@@ -5,6 +5,21 @@ import SwiftUI
 struct MeetingsPane: View {
     @ObservedObject var meeting: MeetingController
     @ObservedObject var store: MeetingStore
+    @AppStorage(Prefs.Key.labsAskMeetings) private var askOn = false
+    @Local private var question = ""
+    @Local private var answer = ""
+    @Local private var asking = false
+
+    private func ask() {
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !asking else { return }
+        asking = true; answer = ""
+        Task {
+            answer = await Polisher.shared.ask(q, meetings: store.meetings)
+                ?? "Asking needs Apple Intelligence or another AI model (Settings → AI)."
+            asking = false
+        }
+    }
 
     var body: some View {
         HSplitView {
@@ -22,6 +37,25 @@ struct MeetingsPane: View {
                         .disabled(store.meetings.isEmpty)
                 }
                 .padding(10)
+                if askOn && !store.meetings.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkle.magnifyingglass").foregroundStyle(.secondary)
+                            TextField("Ask your meetings, like “what did we decide about pricing?”", text: $question)
+                                .textFieldStyle(.roundedBorder).onSubmit { ask() }
+                            if asking { ProgressView().controlSize(.small) }
+                        }
+                        if !answer.isEmpty {
+                            ScrollView {
+                                Text(answer).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 160)
+                            .padding(8).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                            Button("Clear") { answer = ""; question = "" }.buttonStyle(.link).font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.bottom, 8)
+                }
                 if meeting.phase == .processing {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)

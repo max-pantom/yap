@@ -91,6 +91,8 @@ final class MeetingController: ObservableObject {
     let store = MeetingStore()
     private var recorder: MeetingRecorder?
     private var folder: URL?
+    /// The calendar event this meeting belongs to (experimental), looked up when notes start.
+    private var event: MeetingCalendar.Event?
 
     var isRecording: Bool { phase == .recording }
 
@@ -120,6 +122,7 @@ final class MeetingController: ObservableObject {
         }
         self.recorder = recorder
         self.folder = folder
+        event = MeetingCalendar.shared.current()
         phase = .recording
         Task {
             do {
@@ -164,13 +167,15 @@ final class MeetingController: ObservableObject {
 
         if !meeting.lines.isEmpty {
             status = "Writing the summary and action items…"
-            if let notes = await Polisher.shared.meetingNotes(for: meeting.lines) {
+            if let notes = await Polisher.shared.meetingNotes(for: meeting.lines, people: event?.people ?? []) {
                 meeting.title = notes.title
                 meeting.summary = notes.summary
                 meeting.actions = notes.actions.map { Meeting.Action(text: $0) }
             }
         }
+        if let event { meeting.title = event.title }   // the calendar knows best what this was
         if meeting.title == "Meeting" { meeting.title = "Meeting, \(meeting.created.formatted(date: .abbreviated, time: .shortened))" }
+        self.event = nil
         meeting.save()
         // The mixed file is what's kept; the two sides were only needed to tell the speakers apart.
         for side in [sides.you?.url, sides.others?.url].compactMap({ $0 }) { try? FileManager.default.removeItem(at: side) }

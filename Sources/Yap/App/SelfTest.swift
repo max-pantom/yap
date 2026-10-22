@@ -51,6 +51,23 @@ enum SelfTest {
             }
             RunLoop.main.run()
         }
+        if args.contains("--ask-test") {
+            Prefs.registerDefaults()
+            let a = Meeting(title: "Pricing review", summary: "Agreed Pro stays at $8 a month; a yearly plan at $72 launches in November.",
+                            actions: [.init(text: "Update the pricing page (Ada, Friday)")],
+                            lines: [.init(start: 3, end: 6, speaker: .others, text: "Let's keep Pro at eight dollars a month.")],
+                            created: Date().addingTimeInterval(-86400 * 3), duration: 1200)
+            let b = Meeting(title: "Launch sync", summary: "1.2 ships Thursday. Maya writes the release notes.",
+                            actions: [.init(text: "Write the release notes (Maya)")], lines: [], created: Date(), duration: 900)
+            Task {
+                for q in ["What did we decide about pricing?", "Who is writing the release notes?", "What colour is the new logo?"] {
+                    let t0 = Date()
+                    print(String(format: "Q: %@ (%.1fs)\nA: %@\n", q, Date().timeIntervalSince(t0), await Polisher.shared.ask(q, meetings: [a, b]) ?? "no model"))
+                }
+                exit(0)
+            }
+            RunLoop.main.run()
+        }
         if args.contains("--mic-users") {
             let apps = CallDetector.appsUsingMic()
             print("apps using a microphone:", apps.isEmpty ? "none" : apps.map { "\($0)\(CallDetector.callApps[$0].map { " (\($0))" } ?? "")" }.joined(separator: ", "))

@@ -521,6 +521,8 @@ private struct GeneralTab: View {
     @AppStorage(Prefs.Key.showExperimental) var showExperimental = false
     @AppStorage(Prefs.Key.labsIPhoneMic) var iPhoneMic = false
     @AppStorage(Prefs.Key.labsNewSettings) var newSettings = true
+    @AppStorage(Prefs.Key.labsCalendar) var calendarOn = false
+    @AppStorage(Prefs.Key.labsAskMeetings) var askOn = false
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -610,6 +612,15 @@ private struct GeneralTab: View {
                         Text("Use your iPhone as a wireless microphone. Needs the Yap Mic app. Adds an iPhone Mic page.")
                     }
                     .onChange(of: iPhoneMic) { _, _ in RemoteMic.shared.refresh() }
+                    Toggle(isOn: $calendarOn) {
+                        Label("Calendar for meeting notes", systemImage: "calendar")
+                        Text("Names meetings after the event on your calendar, and reminds you to take notes when a call starts.")
+                    }
+                    .onChange(of: calendarOn) { _, on in if on { Task { if !(await MeetingCalendar.shared.requestAccess()) { calendarOn = false } } } }
+                    Toggle(isOn: $askOn) {
+                        Label("Ask your meetings", systemImage: "sparkle.magnifyingglass")
+                        Text("Ask “what did we decide about pricing?” in Library → Meetings. Answered on this Mac.")
+                    }
                 }
             } header: {
                 Text("Experimental")

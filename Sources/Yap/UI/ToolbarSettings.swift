@@ -179,6 +179,8 @@ private struct GeneralColumns: View {
     @AppStorage(Prefs.Key.showExperimental) var showExperimental = false
     @AppStorage(Prefs.Key.labsIPhoneMic) var iPhoneMic = false
     @AppStorage(Prefs.Key.labsNewSettings) var newSettings = true
+    @AppStorage(Prefs.Key.labsCalendar) var calendarOn = false
+    @AppStorage(Prefs.Key.labsAskMeetings) var askOn = false
     @Local private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -234,6 +236,12 @@ private struct GeneralColumns: View {
                         .onChange(of: iPhoneMic) { _, _ in RemoteMic.shared.refresh() }
                         .padding(.leading, 20)
                     Hint("Use your iPhone as a wireless microphone. Adds an iPhone tab.").padding(.leading, 20)
+                    Toggle("Calendar for meeting notes", isOn: $calendarOn)
+                        .onChange(of: calendarOn) { _, on in if on { Task { if !(await MeetingCalendar.shared.requestAccess()) { calendarOn = false } } } }
+                        .padding(.leading, 20)
+                    Hint("Names meetings after the event, and reminds you when a call on your calendar starts.").padding(.leading, 20)
+                    Toggle("Ask your meetings", isOn: $askOn).padding(.leading, 20)
+                    Hint("Ask questions about your meetings in Library → Meetings, answered on this Mac.").padding(.leading, 20)
                 }
             }
         } footer: {
