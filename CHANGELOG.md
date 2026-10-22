@@ -2,14 +2,43 @@
 
 Every release, newest first. The same list is on [yap.primitive8.cc/changelog](https://yap.primitive8.cc/changelog).
 
-## Next
+## 1.2 · coming soon
+
+Pause your recordings, tidy them in one click, and a stack of small things people asked for.
+
+### New
+- **Pause and resume recordings.** A pause button in the recording bar and the menu. Stop for an interruption and
+  carry on in the same video.
+- **Remove Ums & Pauses.** One click in the Library makes a copy without filler words and long silences. Captions
+  and chapters are re-timed; the original stays as it was.
+- **Full-screen camera.** Switch the camera bubble to fill the screen mid-recording, for an intro, then back.
+- **Hide distractions.** Desktop icons are covered by your wallpaper and notification banners stay out of the
+  video, without touching your Finder or Focus settings.
+- **Take meeting notes?** When Zoom, Teams, FaceTime or Meet in a browser starts using your mic, Yap offers to take
+  notes, and offers to end them when the call is over. It never starts on its own.
+- **Pause Yap.** Switch off the dictation key for 15 minutes, an hour or until you resume, for gaming or presenting.
+- **Styles per app.** A clean-up style for particular apps: Verbatim in Terminal, Formal in Mail, Casual in Slack.
+- **Detect the language automatically**, with a Whisper model, for people who switch languages.
+- **Backup.** Export everything (settings, shortcuts, dictionary, snippets, history) to one file and import it on a
+  new Mac. Export your dictations as Markdown or CSV too.
 
 ### Better
-- **Choose where recordings go.** Settings → Recording → Saved in → Change… picks any folder for recordings, their
-  captions and notes (.json) and meeting notes, and offers to move the ones you already have. Use Default goes back
-  to ~/Movies/Yap.
-- **Choose where your dictation history goes.** Settings → Dictation → History → Change… moves history.json to any
-  folder, like a synced one. If that folder already has a history, the two are merged.
+- **Preferred microphones.** A priority list, so your best connected mic is always the one used.
+- **Choose where recordings go,** and **where your dictation history goes,** in Settings, with an offer to move
+  what you already have.
+- **Storage at a glance.** The Library shows how much space recordings use, and can move ones older than 30, 60 or
+  90 days to the Trash for you.
+- **Rename and share.** Double-click a recording to rename it; Share (AirDrop, Mail, Messages) for recordings and
+  meeting notes.
+- **Updates you won't miss.** When a new version is ready, "Update to Yap x.y…" appears in the menu, and Settings
+  shows the version and when Yap last checked.
+
+### Experimental
+Turn these on in Settings → General → Experimental.
+- **Calendar for meeting notes.** Meetings are named after the event on your calendar, the people invited help the
+  notes get names right, and a reminder pops up when a call on your calendar starts.
+- **Ask your meetings.** "What did we decide about pricing?" in Library → Meetings, answered from your notes on
+  this Mac, with the meeting each answer came from.
 
 ## 1.1 · 20 October 2026
 

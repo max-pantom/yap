@@ -43,6 +43,10 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - **Fits in with the text around your cursor:** mid-sentence it adds the space and keeps lowercase; names keep their capitals.
 - **Dictionary and snippets:** teach spellings (`chat gpt => ChatGPT`) and voice shortcuts (`my calendar link => https://…`). Snippets can fill in `{date}`, `{time}`, `{day}`, `{year}` and `{clipboard}`.
 - **⌃⌥V pastes your last dictation again**, and Yap warns you if it can't hear you (wrong mic, muted input).
+- **Styles per app:** Verbatim in Terminal, Formal in Mail, Casual in Slack, and your usual style everywhere else.
+- **Preferred microphones:** a priority list, so AirPods win when they're connected and the built-in mic is the fallback.
+- **Detect the language automatically** with a Whisper model, for people who switch languages.
+- **Pause Yap** for 15 minutes, an hour or until you resume, so the dictation key stays out of the way while you game or present.
 - **Your iPhone as a wireless mic.** With the Yap Mic companion app, hold the button on your phone and talk from across the room. The connection is encrypted with a key only your phone and Mac share, and it stays on your Wi-Fi.
 - Pastes at your cursor **and** leaves the text on your clipboard, so it's never lost. Searchable history and a words-dictated counter.
 
@@ -50,6 +54,10 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - **⌥⇧R** records the display under your pointer, or pick a window or app with the system picker.
 - Draggable **camera bubble** (iPhone via Continuity Camera, USB webcams, capture cards), mic and optional system audio, click highlights, 3-2-1 countdown.
 - **No time limit.** When you stop, the video is copied to your clipboard; paste it straight into Slack, Mail or an issue.
+- **Pause and resume** from the recording bar or the menu; it's still one video at the end.
+- **Full-screen camera:** switch the bubble to fill the screen for an intro, then back.
+- **No distractions:** desktop icons are covered by your wallpaper and notification banners stay out of the video.
+- **Remove Ums & Pauses:** one click saves a copy without filler words and long silences, captions re-timed.
 - **Auto-zoom:** the video smoothly zooms in where you click, follows your pointer, then eases back out. The original is kept; one click removes the zoom.
 - **Blur:** draw boxes over emails, API keys or names to blur or pixelate them, for the whole video or part of it.
 - **Shortcuts on screen:** combos like ⌘K appear in the video for tutorials. Ordinary typing never does.
@@ -64,6 +72,15 @@ Mac using Apple's on-device models, with optional open-weight models you choose 
 - When it ends you get a title, a summary and **action items** (with who and when), made on this Mac and copied as
   Markdown, ready for Notion, Linear, Slack or an email. Library → Meetings keeps them with the audio, and every
   line plays from where it was said.
+- **Take meeting notes?** When a call app starts using your mic, Yap asks (it never starts on its own), and offers
+  to end the notes when the call is over.
+- **Experimental:** name meetings from your calendar and get a reminder when a call starts, and ask your meetings
+  questions like "what did we decide about pricing?", answered on this Mac.
+
+### Your data
+- **Backup:** export settings, shortcuts, dictionary, snippets and history to one file, and import it on a new Mac.
+- **Export dictations** as Markdown or CSV, choose where recordings and history are saved, see how much space
+  recordings use, and optionally move old ones to the Trash.
 
 ### The Flow bar
 A small pill that lives at the bottom of your screen. It shows a live waveform and your words as you talk, and the
@@ -85,8 +102,9 @@ one quick roll when your text lands, and pulses red while recording. Timing and 
 ### Shortcuts and automation
 `yap://` links let Shortcuts ("Open URLs"), Raycast, Alfred, Stream Deck or a script control Yap: `yap://dictate`,
 `yap://command`, `yap://record`, `yap://record-window`, `yap://meeting`, `yap://camera`, `yap://copy-last`,
-`yap://library`, `yap://settings`. Add `?action=start|stop|cancel` to the dictation links, or
-`?action=start|stop|discard` to the recording and meeting ones. The full list is in Settings → General, where you can also turn the links off.
+`yap://pause`, `yap://resume`, `yap://library`, `yap://settings`. Add `?action=start|stop|cancel` to the dictation
+links, `?action=start|stop|pause|resume|discard` to the recording one, `?action=start|stop|discard` to the meeting
+one, and `?mode=full` to the camera one. The full list is in Settings → General, where you can also turn the links off.
 
 ### Models (Settings → Models)
 | Job | Default | Optional |

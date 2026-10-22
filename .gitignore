@@ -4,3 +4,4 @@ build/
 .swiftpm/
 *.xcodeproj/
 xcuserdata/
+.codex-tasks/
