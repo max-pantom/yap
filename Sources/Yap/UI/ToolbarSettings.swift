@@ -262,7 +262,9 @@ private struct DictationColumns: View {
                 }
                 Hint("Hold to talk. Double-tap for hands-free.").padding(.leading, -20)
             }
-            LabeledContent("Microphone:") { MicPicker().labelsHidden().fixedSize() }
+            LabeledContent("Microphone:") {
+                VStack(alignment: .leading, spacing: 6) { MicPicker().labelsHidden().fixedSize(); MicPriorityEditor() }
+            }
             LabeledContent("Language:") {
                 Picker("Language", selection: $locale) {
                     Text("Same as my Mac").tag("")

@@ -153,6 +153,7 @@ private struct DictationTab: View {
                     }
                 }
                 MicPicker()
+                MicPriorityEditor()
                 Picker(selection: $locale) {
                     Text("Same as my Mac").tag("")
                     ForEach(locales, id: \.self) { id in Text(Locale.current.localizedString(forIdentifier: id) ?? id).tag(id) }

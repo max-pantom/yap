@@ -20,7 +20,8 @@ enum Prefs {
         static let recFolder = "rec.folder"
         static let recHideDistractions = "rec.hideDistractions"   // cover desktop icons, leave banners out
         static let historyFolder = "dictation.historyFolder"
-        static let appStyles = "dictation.appStyles"     // [app name: CleanupStyle raw value]   // "" = Application Support/Yap
+        static let appStyles = "dictation.appStyles"
+        static let micPriority = "device.micPriority"    // ["uid|name", …], best first; used when micID is "priority"     // [app name: CleanupStyle raw value]   // "" = Application Support/Yap
         static let bubbleSize = "rec.bubbleSize"
         static let onboarded = "general.onboarded"
         static let showFlowBar = "general.showFlowBar"
