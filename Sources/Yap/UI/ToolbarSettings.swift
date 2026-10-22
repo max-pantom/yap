@@ -205,6 +205,7 @@ private struct GeneralColumns: View {
         Section {
             if Updater.shared.isAvailable {
                 Row("Updates") {
+                    UpdateStatus(updater: Updater.shared)
                     Toggle("Check for updates automatically",
                            isOn: Binding(get: { Updater.shared.automaticallyChecks }, set: { Updater.shared.automaticallyChecks = $0 }))
                     Button("Check Now") { Updater.shared.checkForUpdates() }.padding(.top, 2)

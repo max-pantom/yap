@@ -213,6 +213,7 @@ struct MenuContent: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
+        UpdateMenuItem(updater: Updater.shared)
         MenuStatus(dictation: model.dictation, recorder: model.recorder)
         Section("Dictation") {
             MicPicker()
@@ -261,6 +262,16 @@ private struct RecordButtons: View {
         } else {
             Button("Record Screen  (\(Shortcut.label(.record)))") { recorder.toggle() }
             Button("Record a Window or App…") { recorder.recordPicked() }
+        }
+    }
+}
+
+private struct UpdateMenuItem: View {
+    @ObservedObject var updater: Updater
+    var body: some View {
+        if let v = updater.available {
+            Button("Update to Yap \(v)…") { updater.checkForUpdates() }
+            Divider()
         }
     }
 }

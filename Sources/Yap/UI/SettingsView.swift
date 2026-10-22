@@ -541,6 +541,7 @@ private struct GeneralTab: View {
 
             if Updater.shared.isAvailable {
                 Section("Updates") {
+                    UpdateStatus(updater: Updater.shared)
                     Toggle("Check for updates automatically", isOn: Binding(get: { Updater.shared.automaticallyChecks }, set: { Updater.shared.automaticallyChecks = $0 }))
                     Button("Check now") { Updater.shared.checkForUpdates() }
                 }
@@ -718,5 +719,22 @@ struct PracticeView: View {
         Label(label, systemImage: ok ? "checkmark.circle.fill" : "circle")
             .foregroundStyle(ok ? Color.green : Color.secondary)
             .animation(Motion.enter, value: ok)
+    }
+}
+
+/// "Yap 1.2.0 · checked 10 minutes ago", or the update that's waiting.
+struct UpdateStatus: View {
+    @ObservedObject var updater: Updater
+    var body: some View {
+        if let v = updater.available {
+            HStack {
+                Label("Yap \(v) is ready to install", systemImage: "arrow.down.circle.fill").foregroundStyle(.tint)
+                Spacer()
+                Button("Update Now") { updater.checkForUpdates() }.buttonStyle(.borderedProminent)
+            }
+        } else {
+            Text("Yap \(updater.currentVersion) · " + (updater.lastChecked.map { "checked \($0.formatted(.relative(presentation: .named)))" } ?? "not checked yet"))
+                .foregroundStyle(.secondary)
+        }
     }
 }
