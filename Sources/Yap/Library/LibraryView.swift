@@ -239,6 +239,18 @@ private struct RecordingDetail: View {
                 Label("Captions", systemImage: "captions.bubble")
             }.help("Save a copy with captions burned into the video, for Slack and social")
         }
+        Button {
+            busy = true; status = "Finding ums and long pauses…"
+            Task {
+                do {
+                    let r = try await library.exportTidied(recording)
+                    status = "Tidied copy saved: \(r.fillers) um\(r.fillers == 1 ? "" : "s") and \(String(format: "%.0f", r.removed)) s of pauses taken out. The original is unchanged."
+                } catch { status = error.localizedDescription }
+                busy = false
+            }
+        } label: {
+            Label("Remove Ums & Pauses", systemImage: "scissors")
+        }.help("Save a copy without filler words and long pauses")
     }
 
     private var actions: some View {

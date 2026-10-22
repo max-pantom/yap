@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// `Yap --selftest <audio-file>`: runs the on-device pipeline (speech → cleanup → insights) and prints results.
@@ -31,6 +32,24 @@ enum SelfTest {
             Prefs.registerDefaults()
             MainActor.assumeIsolated { print("delivery:", TextBridge.deliver(args[i + 1])) }
             exit(0)
+        }
+        if let i = args.firstIndex(of: "--tidy-test"), i + 1 < args.count {
+            let src = URL(fileURLWithPath: args[i + 1]), out = FileManager.default.temporaryDirectory.appendingPathComponent("tidy-\(UUID().uuidString).mp4")
+            Prefs.registerDefaults()
+            Task {
+                do {
+                    let words = try await Tighten.words(in: src)
+                    print("words:", words.map { "\($0.text)@\(String(format: "%.2f", $0.start))" }.joined(separator: " "))
+                    let d = try await AVURLAsset(url: src).load(.duration).seconds
+                    print("cuts:", Tighten.cuts(words, duration: d).map { String(format: "%.2f–%.2f", $0.lowerBound, $0.upperBound) })
+                    let r = try await Tighten.apply(to: src, output: out)
+                    let nd = try await AVURLAsset(url: r.url).load(.duration).seconds
+                    print(String(format: "tidied: %.2fs → %.2fs, %d fillers, %.2fs removed", d, nd, r.fillers, r.removed), abs((d - r.removed) - nd) < 0.3 ? "ok" : "FAILED")
+                    try? FileManager.default.removeItem(at: out)
+                    exit(0)
+                } catch { print("FAILED:", error); exit(1) }
+            }
+            RunLoop.main.run()
         }
         if args.contains("--mic-users") {
             let apps = CallDetector.appsUsingMic()

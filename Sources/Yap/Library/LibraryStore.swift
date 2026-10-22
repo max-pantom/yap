@@ -140,6 +140,14 @@ final class LibraryStore: ObservableObject {
         return out
     }
 
+    /// A copy with the ums and long pauses taken out.
+    func exportTidied(_ r: Recording) async throws -> Tighten.Result {
+        let out = uniqueURL(next: r.url, suffix: "tidied")
+        let result = try await Tighten.apply(to: r.url, output: out)
+        reload(select: out)
+        return result
+    }
+
     private func uniqueURL(next video: URL, suffix: String) -> URL {
         let base = video.deletingPathExtension().lastPathComponent + " (\(suffix))"
         var out = video.deletingLastPathComponent().appendingPathComponent(base).appendingPathExtension("mp4")
