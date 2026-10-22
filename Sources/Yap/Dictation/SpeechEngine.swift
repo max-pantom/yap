@@ -11,7 +11,8 @@ final class SpeechEngine: @unchecked Sendable {
 
     /// Resolves the locale and downloads the on-device model if needed. Safe to call repeatedly.
     func prepare(progress: (@Sendable (String) -> Void)? = nil) async throws {
-        let wanted = UserDefaults.standard.string(forKey: Prefs.Key.locale).flatMap { $0.isEmpty ? nil : Locale(identifier: $0) } ?? Locale.current
+        // "auto" is for Whisper, which detects the language each time; Apple Speech then uses the Mac's language.
+        let wanted = UserDefaults.standard.string(forKey: Prefs.Key.locale).flatMap { $0.isEmpty || $0 == Self.autoLanguage ? nil : Locale(identifier: $0) } ?? Locale.current
         if let match = await SpeechTranscriber.supportedLocale(equivalentTo: wanted) {
             locale = match
         } else {
@@ -28,6 +29,10 @@ final class SpeechEngine: @unchecked Sendable {
     }
 
     static func supportedLocales() async -> [Locale] { await SpeechTranscriber.supportedLocales }
+
+    /// The language setting that means "detect it" (Whisper models only).
+    static let autoLanguage = "auto"
+    static var detectsLanguage: Bool { UserDefaults.standard.string(forKey: Prefs.Key.locale) == autoLanguage }
 
     // MARK: Live sessions
 

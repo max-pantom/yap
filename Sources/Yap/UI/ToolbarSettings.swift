@@ -265,14 +265,21 @@ private struct DictationColumns: View {
             LabeledContent("Microphone:") {
                 VStack(alignment: .leading, spacing: 6) { MicPicker().labelsHidden().fixedSize(); MicPriorityEditor() }
             }
-            LabeledContent("Language:") {
+            LabeledContent("Language:") { VStack(alignment: .leading, spacing: 4) {
                 Picker("Language", selection: $locale) {
                     Text("Same as my Mac").tag("")
+                    Text("Detect automatically").tag(SpeechEngine.autoLanguage)
                     ForEach(locales, id: \.self) { id in Text(Locale.current.localizedString(forIdentifier: id) ?? id).tag(id) }
                 }
                 .labelsHidden().fixedSize()
                 .onChange(of: locale) { _, _ in model.dictation.boot() }
-            }
+                if locale == SpeechEngine.autoLanguage {
+                    Text(WhisperEngine.shared.selectedVariant == nil
+                         ? "Needs a Whisper model (Settings → AI). Apple Speech uses your Mac's language."
+                         : "Whisper works out which language you're speaking, every time.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } }
         }
         GroupRule()
         Section {

@@ -156,9 +156,15 @@ private struct DictationTab: View {
                 MicPriorityEditor()
                 Picker(selection: $locale) {
                     Text("Same as my Mac").tag("")
+                    Text("Detect automatically").tag(SpeechEngine.autoLanguage)
                     ForEach(locales, id: \.self) { id in Text(Locale.current.localizedString(forIdentifier: id) ?? id).tag(id) }
                 } label: {
                     Text("Language you speak")
+                    if locale == SpeechEngine.autoLanguage {
+                        Text(WhisperEngine.shared.selectedVariant == nil
+                             ? "Needs a Whisper model (AI Models). Apple Speech uses your Mac's language."
+                             : "Whisper works out which language you're speaking, every time.")
+                    }
                 }
                 .onChange(of: locale) { _, _ in model.dictation.boot() }
             }

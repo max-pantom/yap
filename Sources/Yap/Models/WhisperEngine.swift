@@ -130,13 +130,15 @@ final class WhisperEngine: ObservableObject {
 
     private var language: String? {
         guard let v = selectedVariant, !v.contains(".en") else { return "en" }
+        if SpeechEngine.detectsLanguage { return nil }   // let Whisper hear which language it is
         return SpeechEngine.shared.locale.language.languageCode?.identifier
     }
+    private var detect: Bool { language == nil }
 
     /// 16 kHz mono samples → text.
     func transcribe(samples: [Float]) async throws -> String {
         let k = try await ensureLoaded()
-        let options = DecodingOptions(language: language, skipSpecialTokens: true, withoutTimestamps: true, chunkingStrategy: .vad)
+        let options = DecodingOptions(language: language, detectLanguage: detect, skipSpecialTokens: true, withoutTimestamps: true, chunkingStrategy: .vad)
         let results = try await k.transcribe(audioArray: samples, decodeOptions: options)
         return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -144,7 +146,7 @@ final class WhisperEngine: ObservableObject {
     /// Audio file → timestamped phrases (for recording transcripts and captions).
     func transcribe(file path: String) async throws -> [SpeechEngine.Segment] {
         let k = try await ensureLoaded()
-        let options = DecodingOptions(language: language, skipSpecialTokens: true, chunkingStrategy: .vad)
+        let options = DecodingOptions(language: language, detectLanguage: detect, skipSpecialTokens: true, chunkingStrategy: .vad)
         let results = try await k.transcribe(audioPath: path, decodeOptions: options)
         return results.flatMap(\.segments).compactMap { seg in
             let text = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
